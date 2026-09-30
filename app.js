@@ -317,9 +317,8 @@ function startLearn() {
   $("learnBody").append(LEGEND);
   show("game");
 }
-function learnAbout(r, p) {
-  clearMarks();
-  reveal(r, p, true);
+// The worksheet sentence and the extra facts for a place, and what is read aloud for it.
+function learnLines(r, p) {
   const fact = r.toets && (r.toets.places.find(t => t.ref === p.key) || {}).fact;
   const facts = [...(p.info || [])];
   if (p.kind === "country") {
@@ -327,6 +326,12 @@ function learnAbout(r, p) {
     facts.push(nb.length ? `${p.name} grenst aan ${list(nb)}.` : `${p.name} grenst niet aan andere landen.`);
   } else if (p.in && !p.hint) facts.push(`${p.plural ? "Ze liggen" : "Het ligt"} in ${countryName(r, p.in)}.`);
   else if (p.hint) facts.push(p.hint);
+  return { fact, facts, speech: fact ? `${cap(p.name)}. ${fact}` : `${cap(p.name)}.`, extras: facts };
+}
+function learnAbout(r, p) {
+  clearMarks();
+  reveal(r, p, true);
+  const { fact, facts, speech } = learnLines(r, p);
   const body = $("learnBody"); body.replaceChildren();
   body.append(h("div", { className: "learn-name", textContent: cap(p.name) }),
     h("span", { className: "learn-kind", textContent: p.kind === "country" ? "Land" : KIND_LABEL[p.type] || "Plek" }));
@@ -338,7 +343,7 @@ function learnAbout(r, p) {
     more.onclick = () => { const was = settings.sound; settings.sound = true; speak(facts.join(" ")); settings.sound = was; };
     body.append(h("div", { className: "learn-block" }, h("div", { className: "learn-head" }, h("b", { textContent: "💡 Wist je dat?" }), more), ul));
   }
-  learnSpeech = `${cap(p.name)}. ${fact || ""}`;
+  learnSpeech = speech;
   speak(learnSpeech);
   body.append(LEGEND);
 }
@@ -357,7 +362,7 @@ function learnTap(evt, pt) {
       || (land.classList.contains("country") && placesOf(r).find(x => x.key === "c:" + land.dataset.id));
     if (!p) {
       clearMarks();
-      const msg = land ? "Dit land hoort niet bij deze lijst." : "Dat is zee. Tik op een teken, een land of een gebied.";
+      const msg = land ? LEARN_OTHER : LEARN_SEA;
       $("learnBody").replaceChildren(h("p", { className: "muted", textContent: msg }), LEGEND);
       speak(msg);
       return;
@@ -367,8 +372,13 @@ function learnTap(evt, pt) {
 }
 
 // ---------- sound ----------
-// Read-aloud with the tablet's own Dutch voice (no internet or account needed), plus a short
-// "ding" for right and a soft low tone for wrong. One toggle, next to the question, controls both.
+// Read-aloud from recordings: tools/make_audio.py records every sentence the app can say (see
+// voiceLines below) into audio/, listed in audio/index.json. A sentence without a recording stays
+// silent; only when there are no recordings at all does the tablet's own voice read instead.
+// Plus a short "ding" for right and a soft low tone for wrong. One toggle, next to the question.
+let clips = null;                                         // spoken sentence -> audio file
+fetch("audio/index.json").then(r => r.ok ? r.json() : null).then(j => { clips = j; }).catch(() => {});
+const player = new Audio();
 const synth = window.speechSynthesis;
 let dutchVoice = null, voiceWarned = false, audioCtx = null;
 function pickVoice() {
@@ -389,7 +399,17 @@ function spoken(text) {
 // moment, then speak and nudge with resume(). A newer speak() call replaces a pending one.
 let speakToken = 0, lastSpeak = 0;
 function speak(text) {
-  if (!settings.sound || !synth || !text) return;
+  if (!settings.sound || !text) return;
+  if (clips) {
+    speakToken++; lastSpeak = Date.now();
+    player.pause();
+    const file = clips[spoken(text)];
+    if (!file) return;
+    player.src = "audio/" + file;
+    player.play().catch(() => {});
+    return;
+  }
+  if (!synth) return;
   const token = ++speakToken; lastSpeak = Date.now();
   const go = () => {
     if (token !== speakToken) return;
@@ -402,8 +422,8 @@ function speak(text) {
   if (synth.speaking || synth.pending) { synth.cancel(); setTimeout(go, 150); }
   else go();
 }
-const talking = () => !!(synth && settings.sound && (synth.speaking || synth.pending));
-const hush = () => { speakToken++; if (synth) synth.cancel(); };
+const talking = () => settings.sound && ((!player.paused && !player.ended) || !!(synth && (synth.speaking || synth.pending)));
+const hush = () => { speakToken++; player.pause(); if (synth) synth.cancel(); };
 function effect(kind) {
   if (!settings.sound) return;
   try {
@@ -429,12 +449,12 @@ function renderSoundBtns() {
 function toggleSound() {
   settings.sound = !settings.sound; save(); renderSoundBtns();
   if (!settings.sound) return hush();
-  if (synth && pickVoice() && !dutchVoice && !voiceWarned) {
+  if (!clips && synth && pickVoice() && !dutchVoice && !voiceWarned) {
     voiceWarned = true;
     alert("Er is geen Nederlandse stem op dit apparaat gevonden. Installeer een Nederlandse stem in de instellingen van de tablet (Tekst-naar-spraak).");
   }
   // read what is on screen right now
-  if (mode === "learn") speak($("learnBody").querySelector(".learn-name") ? learnSpeech : "Tik op een teken, een land of een gebied op de kaart.");
+  if (mode === "learn") speak($("learnBody").querySelector(".learn-name") ? learnSpeech : LEARN_START);
   else if (current && !answered) speak($("question").textContent);
 }
 document.querySelectorAll(".soundBtn").forEach(b => b.onclick = toggleSound);
@@ -451,11 +471,54 @@ function say(kind, title, detail = "") {
   f.replaceChildren();
   if (kind === "plain") { f.className = ""; f.textContent = title; return; }
   if (kind === "good" || kind === "bad") effect(kind);
-  speak(/[.!?]$/.test(title) ? `${title} ${detail}` : `${title}. ${detail}`);
+  speak(voiceFor(kind, title, detail));
   const body = h("div", {}, h("b", { textContent: title }));
   if (detail) body.append(h("span", { textContent: detail }));
   f.append(h("i", { className: "fb-icon", textContent: ICONS[kind] }), body);
 }
+// What is said for a result card. Kept to fixed sentences per place so they can be recorded;
+// what she tapped or typed stays on screen only.
+function voiceFor(kind, title, detail, p = current) {
+  const is = p && (p.plural ? "Dat zijn" : "Dat is"), dit = p && (p.plural ? "Dit zijn" : "Dit is");
+  if (p && kind === "good") return /Bijna/.test(title) ? `Goed zo! Bijna goed gespeld. Je schrijft het zo: ${cap(p.name)}.` : `Goed zo! ${is} ${p.name}.`;
+  if (p && kind === "bad") return `Niet helemaal. Het goede antwoord is ${p.name}.`;
+  if (p && kind === "skip") return /tijd/.test(title) ? `De tijd is om! ${dit} ${p.name}.` : `Overgeslagen. ${dit} ${p.name}.`;
+  if (/probeer het nog een keer/.test(title)) return "Niet helemaal, probeer het nog een keer!";
+  return /[.!?]$/.test(title) ? `${title} ${detail}` : `${title}. ${detail}`;
+}
+const endVoice = n => `Je hebt er ${n} goed.`;
+const questionVoice = p => p.kind === "country" ? `Waar ligt ${p.name}?` : p.plural ? `Waar liggen ${p.name}?` : `Waar is ${p.name}?`;
+const ASK_BLUE = "Hoe heet de plek die blauw is aangegeven?";
+const LEARN_START = "Tik op een teken, een land of een gebied op de kaart.";
+const LEARN_SEA = "Dat is zee. Tik op een teken, een land of een gebied.";
+const LEARN_OTHER = "Dit land hoort niet bij deze lijst.";
+
+// Every sentence the app can say for the recorded regions; tools/make_audio.py records these.
+const VOICE_REGIONS = ["south-america"];
+window.voiceLines = () => {
+  const out = new Set(), add = t => t && out.add(spoken(t));
+  const keepMarks = settings.marks;
+  [LEARN_START, LEARN_SEA, LEARN_OTHER, ASK_BLUE, "Niet helemaal, probeer het nog een keer!",
+    voiceFor("hint", "Dat is zee", "Probeer opnieuw!", null), voiceFor("hint", "Dat is een ander gebied", "Probeer opnieuw!", null),
+    voiceFor("hint", "Tik op een teken", "Zoek het juiste teken op de kaart.", null)].forEach(add);
+  for (let n = 0; n <= 60; n++) add(endVoice(n));
+  REGIONS.filter(r => VOICE_REGIONS.includes(r.id)).forEach(r => {
+    const qs = new Map((r.toets ? r.toets.places : []).map(t => [t.ref, t.q]));
+    placesOf(r).filter(p => !p.custom).forEach(p => {
+      const q = p.q || qs.get(p.key);
+      add(questionVoice(p)); add(q);
+      ["good", "bad", "skip"].forEach(k => add(voiceFor(k, "", "", p)));
+      add(voiceFor("good", "Bijna", "", p)); add(voiceFor("skip", "De tijd is om!", "", p));
+      [true, false].forEach(m => { settings.marks = m; hintsFor(r, { ...p, style: "name" }).forEach(add); });
+      hintsFor(r, { ...p, style: "type" }).forEach(add);
+      const { speech, extras } = learnLines(r, p);
+      add(speech); add(extras.join(" "));
+    });
+  });
+  settings.marks = keepMarks;
+  return [...out].filter(Boolean).sort();
+};
+
 let queue, idx, score, current, answered, roundSize, pool;
 // A description question needs a worksheet text; without one it falls back to "Waar ligt …?".
 function styleFor(p) {
@@ -772,9 +835,7 @@ function endRound() {
   $("feedback").innerHTML = `<div class="stars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</div>`;
   $("feedback").append(h("div", { className: "endtime", textContent: `⏱ Je deed er ${fmt(totalMs)} over, gemiddeld ${Math.round(totalMs / 1000 / roundSize)} ${Math.round(totalMs / 1000 / roundSize) === 1 ? "seconde" : "seconden"} per vraag.` }));
   $("timebar").hidden = true;
-  const secs = Math.round(totalMs / 1000), mins = Math.floor(secs / 60), rest = secs % 60;
-  const took = mins ? `${mins} ${mins === 1 ? "minuut" : "minuten"} en ${rest} seconden` : `${rest} seconden`;
-  speak(`${score} van ${roundSize} goed. Je deed er ${took} over.`);
+  speak(endVoice(score));
   $("score").textContent = "";
   $("next").textContent = "Opnieuw spelen"; $("next").dataset.act = "again"; $("next").hidden = false;
   $("skip").hidden = true;
@@ -867,6 +928,8 @@ svg.addEventListener("pointerup", evt => {
 });
 
 // ---------- boot ----------
+if (/[?&]collect\b/.test(location.search))
+  fetch("voice-lines", { method: "POST", body: JSON.stringify(voiceLines()) }).then(() => document.title = "lines saved");
 renderHome();
 show("home");
 // Updates: a new version downloads in the background; the home screen then offers to load it.

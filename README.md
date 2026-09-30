@@ -46,6 +46,19 @@ Country squares are placed automatically (middle of the country, clear of other 
 `python3 tools/check_markers.py` after moving a Feature to see markers that overlap. A Feature can
 have `"shape"` (a region name from the Natural Earth regions file) so a touch anywhere inside it counts.
 
+## Read-aloud
+
+The 🔊 button plays recordings from `audio/` (listed in `audio/index.json`). Without recordings the
+tablet's own voice is used. To (re)make the recordings after texts or places change:
+
+```bash
+python3 tools/make_audio.py serve            # then open http://localhost:8000/?collect, then Ctrl+C
+python3 tools/make_audio.py build --engine google --voice nl-NL-Wavenet-B   # needs GOOGLE_TTS_KEY
+```
+
+`python3 tools/make_audio.py voices` lists the Google Dutch voices. Only new sentences are recorded.
+Bump `CACHE` in `sw.js` and push.
+
 ## Deploy
 
 It is a static site: serve the repository root over HTTPS (GitHub Pages, Netlify, Cloudflare Pages).
