@@ -615,7 +615,7 @@ function submitTyped() {
   else if (verdict === "close") say("good", "Goed zo! Bijna goed gespeld", `Je typte “${text}”. Je schrijft het zo: ${cap(current.name)}.`);
   else say("bad", "Niet helemaal", `Je typte “${text}”. Het goede antwoord is ${cap(current.name)}.`
     + (lookAlike ? ` Let op: ${cap(current.name)} en ${cap(lookAlike.name)} lijken op elkaar.` : ""));
-  finish(hit);
+  finish(hit, verdict === "exact");
 }
 $("typeGo").addEventListener("pointerdown", e => { e.preventDefault(); submitTyped(); });
 $("typeGo").onclick = submitTyped;                    // keyboard / mouse fallback; a second call is ignored
@@ -709,7 +709,9 @@ function pick(p, button) {
   }
   finish(hit);
 }
-function finish(hit) {
+// Auto-advance only after a fully correct answer; after a typo, a mistake, a skip or time-up she
+// taps "Volgende" herself, so there is time to read the right answer or spelling.
+function finish(hit, perfect = hit) {
   stopClock();
   answered = true;
   if (hit) score++;
@@ -719,7 +721,7 @@ function finish(hit) {
   $("next").hidden = false;
   $("skip").hidden = true;
   $("hintBtn").hidden = true;
-  startAuto();
+  if (perfect) startAuto();
 }
 let autoTimer = null;
 function clearAuto() { clearInterval(autoTimer); clearTimeout(autoTimer); autoTimer = null; }
