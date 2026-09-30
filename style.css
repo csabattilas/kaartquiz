@@ -143,3 +143,10 @@ svg#map { height: 100%; max-width: 100%; touch-action: manipulation; }
 #borders path { fill: none; pointer-events: none; stroke-linejoin: round; }
 .border { stroke: var(--line); stroke-width: 1.7; }
 .territory-border { stroke: var(--terr-line); stroke-width: 1; }
+
+#hintText { background: color-mix(in srgb, #f2c230 22%, var(--card)); border: 2px dashed #f2c230; border-radius: 16px;
+  padding: 12px 14px; font-size: 1.05rem; line-height: 1.4; display: grid; gap: 6px; animation: pop .28s ease-out; }
+#hintText div::before { content: "💡 "; }
+.btns { margin: 0; flex-wrap: wrap; gap: 10px; }
+.btns [hidden] { display: none; }
+.hint-zone { fill: rgba(242, 194, 48, .16); stroke: #f2c230; stroke-width: 3; stroke-dasharray: 10 6; pointer-events: none; }

@@ -8,7 +8,7 @@ const SIZES = [["Klein", 100], ["Middel", 250], ["Groot", 500]];
 const NS = "http://www.w3.org/2000/svg";
 
 const AUTO = [["Uit", 0], ["3 sec", 3], ["5 sec", 5], ["10 sec", 10]];   // wait after an answer, then go on by itself
-const defaults = () => ({ region: REGIONS[0].id, length: 10, marks: true, auto: 0, detail: true, set: "all", style: "name", off: {}, custom: {} });
+const defaults = () => ({ region: REGIONS[0].id, length: 10, marks: true, auto: 0, detail: true, set: "all", style: "name", retry: false, off: {}, custom: {} });
 // Symbol per kind of Feature, following the legend on the Mondus Novus worksheet:
 // square = land/gebied, circle = stad/plaats, diamond = water, triangle = gebergte.
 // The map shows only the symbol, never the name.
@@ -219,6 +219,7 @@ function renderSettings() {
   if (r.toets) seg($("setSet"), [["Alle plekken", "all"], [r.toets.name, "toets"]], v => v === settings.set, v => { settings.set = v; save(); renderSettings(); });
   $("pickLists").hidden = toetsOn(r);
   seg($("setStyle"), STYLES, v => v === settings.style, v => { settings.style = v; save(); renderSettings(); });
+  seg($("setRetry"), [["Uit", false], ["Aan", true]], v => v === settings.retry, v => { settings.retry = v; save(); renderSettings(); });
   seg($("setAuto"), AUTO, v => v === settings.auto, v => { settings.auto = v; save(); renderSettings(); });
   seg($("setDetail"), [["Met rivieren en bergen", true], ["Alleen landen", false]], v => v === settings.detail, v => { settings.detail = v; save(); renderSettings(); });
   seg($("setMarks"), [["Met tekens op de kaart", true], ["Zonder tekens (tik op de plek)", false]], v => v === settings.marks, v => { settings.marks = v; save(); renderSettings(); });
@@ -366,11 +367,71 @@ function ask() {
   }
   $("next").hidden = true;
   $("skip").hidden = false;
+  resetHints(); $("hintBtn").disabled = false;
+  tries = 0;
 }
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+// ---------- hints ----------
+// Three steps: what to look for and roughly where, then which country / neighbours, then a circle on the map.
+const SHAPE_WORD = { area: "een vierkantje", sight: "een rondje", river: "een ruitje", water: "een ruitje", mountain: "een driehoekje", island: "een zeshoekje", volcano: "een omgekeerd driehoekje" };
+const countryName = (r, code) => (r.countries.find(c => c.code === code) || {}).name;
+const list = xs => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " en " + xs[xs.length - 1];
+function direction(r, at) {
+  const c = r.compass;                                  // the mainland, so far-off islands do not skew it
+  const ny = (at[0] - c.latMin) / (c.latMax - c.latMin), nx = (at[1] - c.lonMin) / (c.lonMax - c.lonMin);
+  const ns = ny > .62 ? "noord" : ny < .38 ? "zuid" : "", ew = nx < .38 ? "west" : nx > .62 ? "oost" : "";
+  return ns || ew ? `in het ${ns}${ew}en van de kaart` : "in het midden van de kaart";
+}
+function hintsFor(r, p) {
+  const at = p.at || (r.countries.find(c => c.code === p.id) || {}).at;
+  const kind = p.kind === "country" ? "een land" : settings.marks ? SHAPE_WORD[p.type] || "een teken" : "een plek";
+  const first = `Zoek ${kind} ${direction(r, at)}.`;
+  let second;
+  if (p.hint) second = p.hint;
+  else if (p.kind === "country") {
+    const nb = (r.countries.find(c => c.code === p.id).nb || []).map(c => countryName(r, c)).filter(Boolean);
+    second = nb.length ? `Het grenst aan ${list(nb)}.` : "Het is een eiland, het grenst niet aan andere landen.";
+  } else if (p.in) second = `${p.plural ? "Ze liggen" : "Het ligt"} in ${countryName(r, p.in)}.`;
+  else if (p.near) second = `${p.plural ? "Ze liggen" : "Het ligt"} ${p.type === "water" || p.type === "river" ? "bij" : "aan de kust van"} ${countryName(r, p.near)}.`;
+  return [first, second, "Kijk in de gele cirkel op de kaart."].filter(Boolean);
+}
+let hintStep = 0;
+function resetHints() {
+  hintStep = 0;
+  $("hintText").hidden = true; $("hintText").textContent = "";
+  $("hintBtn").hidden = false; $("hintBtn").textContent = "💡 Hint";
+}
+$("hintBtn").onclick = () => {
+  if (answered || !current) return;
+  const r = region(), hs = hintsFor(r, current);
+  if (hintStep >= hs.length) return;
+  $("hintText").hidden = false;
+  $("hintText").append(h("div", { textContent: hs[hintStep] }));
+  if (hintStep === hs.length - 1) {                     // last step: a circle around the area, a bit off-centre
+    const at = current.at || r.countries.find(c => c.code === current.id).at;
+    const [x, y] = project(r, ...at), rad = r.width * .12, ang = Math.random() * 2 * Math.PI, off = rad * .45 * Math.random();
+    overlay.appendChild(el("circle", { class: "ring hint-zone", cx: x + off * Math.cos(ang), cy: y + off * Math.sin(ang), r: rad }));
+  }
+  hintStep++;
+  $("hintBtn").textContent = hintStep < hs.length ? `💡 Nog een hint (${hintStep}/${hs.length})` : "💡 Geen hints meer";
+  $("hintBtn").disabled = hintStep >= hs.length;
+};
+// Second chance (setting): the first wrong answer only shows what was tapped and lets her try again.
+let tries = 0;
+function tryAgain(name, showTap) {
+  if (!settings.retry || tries > 0) return false;
+  tries++;
+  overlay.querySelectorAll(":scope > :not(.hint-zone)").forEach(n => n.remove());
+  document.querySelectorAll(".country.wrong,.region-area.wrong").forEach(n => n.classList.remove("wrong"));
+  showTap();
+  say("hint", "Niet helemaal, probeer het nog een keer!", name ? `Je tikte op ${name}.` : "");
+  return true;
+}
 function pick(p, button) {
   if (answered || !current) return;
   const r = region(), hit = p.key === current.key;
+  if (!hit && tryAgain("", () => { button.classList.add("bad"); button.disabled = true; })) return;
   overlay.innerHTML = "";                                  // drop the blue "which place?" ring, keep the buttons
   document.querySelectorAll(".country.ask,.region-area.ask").forEach(n => n.classList.remove("ask"));
   [...$("choices").children].forEach(b => { b.disabled = true; if (b.textContent === cap(current.name)) b.classList.add("good"); });
@@ -390,6 +451,7 @@ function finish(hit) {
   $("next").dataset.act = idx === roundSize - 1 ? "end" : "next";
   $("next").hidden = false;
   $("skip").hidden = true;
+  $("hintBtn").hidden = true;
   startAuto();
 }
 let autoTimer = null;
@@ -438,6 +500,7 @@ function endRound() {
   $("score").textContent = "";
   $("next").textContent = "Opnieuw spelen"; $("next").dataset.act = "again"; $("next").hidden = false;
   $("skip").hidden = true;
+  $("hintBtn").hidden = true; $("hintText").hidden = true;
   current = null;
 }
 $("backbtn").onclick = () => {
@@ -466,6 +529,7 @@ svg.addEventListener("pointerup", evt => {
     const mk = evt.target.closest && evt.target.closest("#markers [data-key]");
     const onMarker = mk && pool.find(p => p.key === mk.dataset.key);
     if (onMarker && onMarker.kind === "feature" && !(target && target.dataset.id === current.id)) {
+      if (tryAgain(onMarker.name, () => { reveal(r, onMarker, false); crossMark(r, ...project(r, ...onMarker.at)); })) return;
       reveal(r, current, true); reveal(r, onMarker, false); crossMark(r, ...project(r, ...onMarker.at));
       say("bad", "Niet helemaal", `Je tikte op ${onMarker.name}. Het groene land is ${current.name}.`);
       return finish(false);
@@ -473,6 +537,7 @@ svg.addEventListener("pointerup", evt => {
     if (!target) { say("hint", "Dat is zee", "Probeer opnieuw!"); return; }
     if (target.classList.contains("territory")) { say("hint", "Dat is een ander gebied", "Probeer opnieuw!"); return; }
     const hit = target.dataset.id === current.id;
+    if (!hit && tryAgain(countryName(r, target.dataset.id), () => { target.classList.add("wrong"); crossMark(r, pt.x, pt.y); })) return;
     reveal(r, current, true);
     if (hit) say("good", "Goed zo!", `${current.plural ? "Dat zijn" : "Dat is"} ${current.name}.`);
     else {
@@ -490,6 +555,11 @@ svg.addEventListener("pointerup", evt => {
     // a region question counts any touch; other questions need a marker
     if (!tapped && !current.d) { say("hint", "Tik op een teken", "Zoek het juiste teken op de kaart."); return; }
     const hit = tapped === current.key;
+    const tappedPlace = tapped && pool.find(p => p.key === tapped);
+    if (!hit && tryAgain(tappedPlace && tappedPlace.name, () => {
+      if (tappedPlace) reveal(r, tappedPlace, false);
+      crossMark(r, ...(tappedPlace ? project(r, ...tappedPlace.at) : [pt.x, pt.y]));
+    })) return;
     reveal(r, current, true);
     if (hit) say("good", "Goed zo!", `${current.plural ? "Dat zijn" : "Dat is"} ${current.name}.`);
     else {
@@ -502,6 +572,7 @@ svg.addEventListener("pointerup", evt => {
   } else {
     const d = kmBetween(unproject(r, pt.x, pt.y), current.at);
     const hit = d <= current.r || !!(current.d && document.elementsFromPoint(evt.clientX, evt.clientY).includes(regionNode(current)));
+    if (!hit && tryAgain("", () => crossMark(r, pt.x, pt.y))) return;
     if (current.d) reveal(r, current, hit);
     const [ax, ay] = project(r, ...current.at);
     overlay.appendChild(el("circle", { cx: ax, cy: ay, r: kmToUnits(r, current.r), fill: hit ? "rgba(60,179,113,.30)" : "rgba(224,86,107,.22)", stroke: hit ? "#3cb371" : "#e0566b", "stroke-width": 2, "stroke-dasharray": "6 4" }));

@@ -149,6 +149,20 @@ def build(cfg):
             taken.append(to_xy(at))
     countries = [{**c, 'at': placed[c['code']]} for c in cfg['countries']]
 
+    # Hint data. Neighbours share border vertices in Natural Earth, so compare rounded vertices.
+    verts = {code: {(round(x, 2), round(y, 2)) for p in polygons(g) for x, y in p[0]} for code, g in geoms.items()}
+    for c in countries:
+        c['nb'] = sorted(o for o in geoms if o != c['code'] and verts[c['code']] & verts[o])
+
+    def country_of(at):
+        lat, lon = at
+        for code, g in geoms.items():
+            if any(_in_ring((lon, lat), p[0]) for p in polygons(g)):
+                return {'in': code}
+        near = min(geoms, key=lambda code: min(math.hypot((x - lon) * math.cos(math.radians(lat)), y - lat)
+                                               for x, y in list(verts[code])[::5]))
+        return {'near': near}
+
     hidden = [g['geometry'] for g in world['features'] if g['properties']['ADM0_A3'] in cfg.get('hide', [])]
 
     def in_hidden(x, y):
@@ -194,9 +208,10 @@ def build(cfg):
         'id': cfg['id'], 'name': cfg['name'], 'emoji': cfg['emoji'],
         'width': width, 'height': height, 'k': k, 'cos': cos,
         'lon0': b['lonMin'], 'lat0': b['latMax'],
-        'countries': countries, 'features': [with_shape(f) for f in cfg['features']], 'shapes': shapes,
+        'countries': countries, 'features': [{**with_shape(f), **country_of(f['at'])} for f in cfg['features']], 'shapes': shapes,
         'rivers': river_paths, 'lakes': lake_paths, 'ranges': range_paths,
         'toets': cfg.get('toets'),
+        'compass': cfg.get('compass'),
     }
 
 
