@@ -7,7 +7,8 @@ const LENGTHS = [5, 10, 20, 0];            // 0 = alle geselecteerde plekken
 const SIZES = [["Klein", 100], ["Middel", 250], ["Groot", 500]];
 const NS = "http://www.w3.org/2000/svg";
 
-const defaults = () => ({ region: REGIONS[0].id, length: 10, marks: true, off: {}, custom: {} });
+const AUTO = [["Uit", 0], ["3 sec", 3], ["5 sec", 5], ["10 sec", 10]];   // wait after an answer, then go on by itself
+const defaults = () => ({ region: REGIONS[0].id, length: 10, marks: true, auto: 0, off: {}, custom: {} });
 // Symbol per kind of Feature; the map shows only the symbol, never the name.
 const TYPES = {
   mountain: { label: "berg / gebergte", color: "#8b5a2b" },
@@ -163,6 +164,7 @@ function renderSettings() {
 
   $("lenInput").value = settings.length || "";
   $("lenInput").placeholder = settings.length ? "" : "alles";
+  seg($("setAuto"), AUTO, v => v === settings.auto, v => { settings.auto = v; save(); renderSettings(); });
   seg($("setMarks"), [["Met tekens op de kaart", true], ["Zonder tekens (tik op de plek)", false]], v => v === settings.marks, v => { settings.marks = v; save(); renderSettings(); });
 
   const fill = (box, kind, extra) => {
@@ -243,6 +245,7 @@ $("cSave").onclick = () => {
 let queue, idx, score, current, answered, roundSize;
 
 function startQuiz() {
+  clearAuto();
   const r = region(), pool = enabled(r);
   if (!pool.length) return;
   mode = "quiz";
@@ -272,6 +275,22 @@ function finish(hit) {
   $("next").dataset.act = idx === roundSize - 1 ? "end" : "next";
   $("next").hidden = false;
   $("skip").hidden = true;
+  startAuto();
+}
+let autoTimer = null;
+function clearAuto() { clearInterval(autoTimer); autoTimer = null; }
+function startAuto() {
+  clearAuto();
+  if (!settings.auto) return;
+  const label = $("next").textContent;
+  let left = settings.auto;
+  const tick = () => { $("next").textContent = `${label} (${left})`; };
+  tick();
+  autoTimer = setInterval(() => {
+    left--;
+    if (left <= 0) { clearAuto(); $("next").textContent = label; $("next").click(); }
+    else tick();
+  }, 1000);
 }
 // Skipping counts as not answered: show where it was, score nothing.
 $("skip").onclick = () => {
@@ -288,6 +307,7 @@ $("skip").onclick = () => {
   finish(false);
 };
 $("next").onclick = () => {
+  clearAuto();
   const act = $("next").dataset.act;
   if (act === "end") return endRound();
   if (act === "again") return startQuiz();
@@ -305,6 +325,7 @@ function endRound() {
   current = null;
 }
 $("backbtn").onclick = () => {
+  clearAuto();
   if (mode === "editor") return $("cCancel").onclick();
   renderHome(); show("home");
 };
