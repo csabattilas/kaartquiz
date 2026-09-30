@@ -126,7 +126,7 @@ function crossMark(r, x, y) {
   overlay.appendChild(g);
 }
 function renderLegend(pool) {
-  const box = $("legend"); box.innerHTML = "";
+  const box = LEGEND; box.innerHTML = "";
   if (!settings.marks) return;
   const seen = new Set();
   Object.entries(TYPES).forEach(([type, t]) => {
@@ -146,6 +146,7 @@ const kmToUnits = (r, km) => km / 111.32 * r.k;       // 1° latitude ≈ 111.32
 
 // ---------- map ----------
 const svg = $("map"), overlay = $("overlay");
+const LEGEND = document.getElementById("legend");      // moved between the quiz and learning panels
 function drawMap(r) {
   svg.setAttribute("viewBox", `0 0 ${r.width} ${r.height}`);
   ["seaRect", "clipRect"].forEach(id => { const n = $(id); n.setAttribute("width", r.width); n.setAttribute("height", r.height); });
@@ -193,9 +194,10 @@ function renderHome() {
   const n = poolOf(r).length;
   $("homeNote").textContent = !n ? "Zet in de instellingen eerst plekken aan."
     : toetsOn(r) ? `${r.toets.name}: ${n} plekken` : `${n} plekken staan aan`;
-  $("play").disabled = !n;
+  $("play").disabled = !n; $("learn").disabled = !n;
 }
 $("play").onclick = startQuiz;
+$("learn").onclick = startLearn;
 $("openSettings").onclick = () => { renderSettings(); show("settings"); };
 $("closeSettings").onclick = () => { renderHome(); show("home"); };
 
@@ -272,7 +274,7 @@ let mode = "quiz", draft = null;
 $("addCustom").onclick = () => {
   mode = "editor"; draft = { at: null, r: 250, type: "sight" };
   drawMap(region());
-  $("quizPanel").hidden = true; $("editor").hidden = false;
+  $("quizPanel").hidden = true; $("editor").hidden = false; $("learnPanel").hidden = true;
   $("cName").value = ""; renderTypes(); renderSizes(); updateSave();
   $("editorHint").textContent = "Tik op de kaart waar de plek ligt.";
   show("game");
@@ -298,6 +300,65 @@ $("cSave").onclick = () => {
   (settings.custom[r.id] = settings.custom[r.id] || []).push({ id: "c-" + Date.now().toString(36), name, at: draft.at, r: draft.r, type: draft.type });
   save(); renderSettings(); show("settings");
 };
+
+// ---------- learning ----------
+// No questions: she taps a marker, country or region and reads about it.
+const KIND_LABEL = { area: "Gebied", sight: "Stad / plaats", river: "Water", water: "Water", mountain: "Gebergte", island: "Eiland", volcano: "Vulkaan" };
+function startLearn() {
+  clearAuto(); clearInterval(clockTimer); clockTimer = null;
+  const r = region();
+  pool = poolOf(r);
+  if (!pool.length) return;
+  mode = "learn"; current = null;
+  drawMap(r); drawRegions(pool); drawMarkers(r, pool); renderLegend(pool);
+  $("quizPanel").hidden = true; $("editor").hidden = true; $("learnPanel").hidden = false;
+  $("learnTitle").textContent = toetsOn(r) ? `Leren: ${r.toets.name}` : `Leren: ${r.name}`;
+  $("learnBody").replaceChildren(h("p", { className: "muted", textContent: "Tik op een teken, een land of een gebied op de kaart." }));
+  $("learnBody").append(LEGEND);
+  show("game");
+}
+function learnAbout(r, p) {
+  clearMarks();
+  reveal(r, p, true);
+  const fact = r.toets && (r.toets.places.find(t => t.ref === p.key) || {}).fact;
+  const facts = [...(p.info || [])];
+  if (p.kind === "country") {
+    const nb = (r.countries.find(c => c.code === p.id).nb || []).map(c => countryName(r, c)).filter(Boolean);
+    facts.push(nb.length ? `${p.name} grenst aan ${list(nb)}.` : `${p.name} grenst niet aan andere landen.`);
+  } else if (p.in && !p.hint) facts.push(`${p.plural ? "Ze liggen" : "Het ligt"} in ${countryName(r, p.in)}.`);
+  else if (p.hint) facts.push(p.hint);
+  const body = $("learnBody"); body.replaceChildren();
+  body.append(h("div", { className: "learn-name", textContent: cap(p.name) }),
+    h("span", { className: "learn-kind", textContent: p.kind === "country" ? "Land" : KIND_LABEL[p.type] || "Plek" }));
+  if (fact) body.append(h("div", { className: "learn-block sheet" }, h("b", { textContent: "📝 Van je werkblad" }), h("p", { textContent: fact })));
+  if (facts.length) {
+    const ul = h("ul");
+    facts.forEach(f => ul.append(h("li", { textContent: f })));
+    body.append(h("div", { className: "learn-block" }, h("b", { textContent: "💡 Wist je dat?" }), ul));
+  }
+  body.append(LEGEND);
+}
+function learnTap(evt, pt) {
+  const r = region();
+  const mk = evt.target.closest && evt.target.closest("#markers [data-key]");
+  const under = document.elementsFromPoint(evt.clientX, evt.clientY);
+  let p = mk && pool.find(x => x.key === mk.dataset.key);
+  if (!p) {
+    const reg = under.find(n => n.classList && n.classList.contains("region-area"));
+    p = reg && pool.find(x => x.key === reg.dataset.key);
+  }
+  if (!p) {
+    const land = under.find(n => n.dataset && n.dataset.id && n.closest("#land"));
+    if (land) p = pool.find(x => x.key === "c:" + land.dataset.id)
+      || (land.classList.contains("country") && placesOf(r).find(x => x.key === "c:" + land.dataset.id));
+    if (!p) {
+      clearMarks();
+      $("learnBody").replaceChildren(h("p", { className: "muted", textContent: land ? "Dit land hoort niet bij deze lijst." : "Dat is zee. Tik op een teken, een land of een gebied." }), LEGEND);
+      return;
+    }
+  }
+  learnAbout(r, p);
+}
 
 // ---------- quiz ----------
 // Result card: colour and icon tell right / wrong / skipped / try-again at a glance.
@@ -335,7 +396,8 @@ function startQuiz() {
   queue = shuffle(pool.slice()).slice(0, roundSize).map(p => ({ ...p, style: styleFor(p) }));
   idx = 0; score = 0; totalMs = 0;
   drawMap(r); drawRegions(pool); drawMarkers(r, pool); renderLegend(pool);
-  $("quizPanel").hidden = false; $("editor").hidden = true;
+  $("quizPanel").hidden = false; $("editor").hidden = true; $("learnPanel").hidden = true;
+  $("quizPanel").append(LEGEND);                   // the legend may have moved into the learning panel
   $("score").textContent = "";
   show("game");
   ask();
@@ -605,6 +667,7 @@ svg.addEventListener("pointerup", evt => {
     $("editorHint").textContent = "Klopt de plek? Tik opnieuw om te verplaatsen.";
     return;
   }
+  if (mode === "learn") return learnTap(evt, pt);
   if (answered || !current || (current.style === "choice" || current.style === "type")) return;
 
   // Markers sit on top of the land, so look through them to the country underneath.

@@ -21,7 +21,7 @@
   <p>Kies een werelddeel en zoek de plek op de kaart.</p>
   <div class="regions" id="regionCards"></div>
   <div class="seg" id="homeSet"></div>
-  <button id="play">Spelen</button>
+  <div class="row homebtns"><button id="play">Spelen</button><button id="learn" class="ghost">📖 Leren</button></div>
   <p id="homeNote"></p>
   <button id="openSettings" class="ghost">⚙️ Instellingen</button>
 </section>
@@ -81,6 +81,10 @@
       <div class="row btns"><button id="hintBtn" class="ghost">💡 Hint</button>
       <button id="skip" class="ghost">Overslaan</button></div>
       <div id="legend"></div>
+    </div>
+    <div id="learnPanel" hidden>
+      <div id="learnTitle">Leren</div>
+      <div id="learnBody"><p class="muted">Tik op een teken, een land of een gebied op de kaart.</p></div>
     </div>
     <div id="editor" hidden>
       <div style="font-size:1.6rem;font-weight:800">Nieuwe plek</div>

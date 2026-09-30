@@ -60,6 +60,10 @@ _Avoid_: Tip, clue
 A setting under which the first wrong answer to a Question is not final; the answer is only revealed after a second miss.
 _Avoid_: Retry, extra life
 
+**Learning mode**:
+A way to use the map without questions: the child touches a Place and reads about it (the worksheet sentence and extra facts).
+_Avoid_: Study mode, explore
+
 **Question**:
 One prompt asking the child to find a Place.
 
