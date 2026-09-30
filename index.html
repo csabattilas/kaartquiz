@@ -20,6 +20,7 @@
   <h1>Kaartquiz</h1>
   <p>Kies een werelddeel en zoek de plek op de kaart.</p>
   <div class="regions" id="regionCards"></div>
+  <div class="seg" id="homeSet"></div>
   <button id="play">Spelen</button>
   <p id="homeNote"></p>
   <button id="openSettings" class="ghost">⚙️ Instellingen</button>
@@ -88,6 +89,8 @@
       <rect class="sea" id="seaRect" rx="14"/>
       <g id="land" clip-path="url(#frame)"></g>
       <g id="physical" clip-path="url(#frame)"></g>
+      <g id="borders" clip-path="url(#frame)"></g>
+      <g id="regionsHit" clip-path="url(#frame)"></g>
       <g id="markers" clip-path="url(#frame)"></g>
       <g id="overlay" clip-path="url(#frame)"></g>
     </svg>

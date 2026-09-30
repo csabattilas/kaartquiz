@@ -36,7 +36,7 @@ const region = () => REGIONS.find(r => r.id === settings.region) || REGIONS[0];
 function placesOf(r) {
   const customs = (settings.custom[r.id] || []).map(c => ({ type: "sight", ...c, key: "f:" + c.id, kind: "feature", custom: true }));
   return [
-    ...r.countries.map(c => ({ key: "c:" + c.code, kind: "country", id: c.code, name: c.name, small: !!c.small })),
+    ...r.countries.map(c => ({ key: "c:" + c.code, kind: "country", id: c.code, name: c.name, small: !!c.small, type: "area", at: c.at })),
     ...r.features.map(f => ({ key: "f:" + f.id, kind: "feature", ...f })),
     ...customs,
   ];
@@ -58,7 +58,7 @@ function poolOf(r) {
   const all = placesOf(r);
   return r.toets.places.map(t => {
     const p = all.find(x => x.key === t.ref);
-    return p.kind === "country" ? { ...p, type: "area", at: t.at, q: t.q } : { ...p, q: t.q };
+    return { ...p, q: t.q };
   });
 }
 
@@ -87,7 +87,7 @@ const kmBetween = (a, b) => {
   return 12742 * Math.asin(Math.sqrt(s));
 };
 function symbol(type, x, y, s) {
-  const color = (TYPES[type] || TYPES.area).color, a = { fill: "#1c1f24", stroke: color, "stroke-width": s * .45, "stroke-linejoin": "round" };
+  const color = (TYPES[type] || TYPES.area).color, a = { fill: "#33373e", stroke: color, "stroke-width": s * .45, "stroke-linejoin": "round" };
   switch (type) {
     case "mountain": return el("polygon", { ...a, points: `${x},${y - s} ${x + s * 1.1},${y + s * .8} ${x - s * 1.1},${y + s * .8}` });
     case "river": case "water": return el("polygon", { ...a, points: `${x},${y - s * 1.15} ${x + s * .85},${y} ${x},${y + s * 1.15} ${x - s * .85},${y}` });
@@ -97,7 +97,7 @@ function symbol(type, x, y, s) {
     default:         return el("rect", { ...a, x: x - s * .9, y: y - s * .9, width: s * 1.8, height: s * 1.8 });
   }
 }
-const markerSize = r => r.width * 0.011;
+const markerSize = r => r.width * 0.015;           // keep in sync with MARKER in tools/build_regions.py
 function markerNode(r, p, x, y) {
   const s = markerSize(r), g = el("g", { class: "marker", "data-key": p.key });
   g.append(el("circle", { class: "hit", cx: x, cy: y, r: s * 2.2 }), symbol(p.type, x, y, s));
@@ -108,6 +108,12 @@ function drawMarkers(r, pool) {
   if (!settings.marks) return;
   pool.filter(p => p.at).forEach(p => box.appendChild(markerNode(r, p, ...project(r, ...p.at))));
 }
+// Regions with a shape (Atacama, Patagonia, ...) answer like countries: touch anywhere inside.
+function drawRegions(pool) {
+  const box = $("regionsHit"); box.innerHTML = "";
+  pool.filter(p => p.d).forEach(p => box.appendChild(el("path", { class: "region-area", "data-key": p.key, d: p.d })));
+}
+const regionNode = p => document.querySelector(`#regionsHit [data-key="${p.key}"]`);
 function ringMarker(r, p, color) {
   const [x, y] = project(r, ...p.at);
   overlay.appendChild(el("circle", { class: "ring", cx: x, cy: y, r: markerSize(r) * 2, fill: "none", stroke: color, "stroke-width": 3 }));
@@ -133,6 +139,7 @@ function renderLegend(pool) {
 // Show a Place on the map: a country is coloured, a Feature gets a ring round its marker.
 function reveal(r, p, good) {
   if (p.kind === "country") document.querySelector(`.country[data-id="${p.id}"]`).classList.add(good ? "right" : "wrong");
+  if (p.d && regionNode(p)) regionNode(p).classList.add(good ? "right" : "wrong");
   if (p.at && (p.kind === "feature" || settings.marks)) ringMarker(r, p, good ? "#3cb371" : "#e0566b");
 }
 const kmToUnits = (r, km) => km / 111.32 * r.k;       // 1° latitude ≈ 111.32 km
@@ -146,8 +153,11 @@ function drawMap(r) {
   // neutral areas first so quiz countries sit on top where they touch
   [...r.shapes].sort((a, b) => a.quiz - b.quiz).forEach(s =>
     land.appendChild(el("path", { class: s.quiz ? "country" : "territory", "data-id": s.code, d: s.d })));
-  overlay.innerHTML = ""; $("markers").innerHTML = "";
+  overlay.innerHTML = ""; $("markers").innerHTML = ""; $("regionsHit").innerHTML = "";
   drawPhysical(r);
+  // Borders again on top of the rivers and mountain shading, so they stay clear.
+  const borders = $("borders"); borders.innerHTML = "";
+  r.shapes.forEach(s => borders.appendChild(el("path", { class: s.quiz ? "border" : "border territory-border", d: s.d })));
 }
 // Mountain ranges, lakes and rivers drawn without names, under the markers.
 function drawPhysical(r) {
@@ -159,7 +169,7 @@ function drawPhysical(r) {
 }
 function clearMarks() {
   overlay.innerHTML = "";
-  document.querySelectorAll(".country.right,.country.wrong,.country.ask").forEach(n => n.classList.remove("right", "wrong", "ask"));
+  document.querySelectorAll(".country.right,.country.wrong,.country.ask,.region-area.right,.region-area.wrong,.region-area.ask").forEach(n => n.classList.remove("right", "wrong", "ask"));
   $("choices").replaceChildren();
 }
 function svgPoint(evt) {
@@ -177,7 +187,10 @@ function renderHome() {
     b.onclick = () => { settings.region = r.id; save(); renderHome(); };
     cards.appendChild(b);
   });
-  const r = region(), n = poolOf(r).length;
+  const r = region();
+  $("homeSet").hidden = !r.toets;
+  if (r.toets) seg($("homeSet"), [["Alle plekken", "all"], ["📝 " + r.toets.name, "toets"]], v => v === settings.set, v => { settings.set = v; save(); renderHome(); });
+  const n = poolOf(r).length;
   $("homeNote").textContent = !n ? "Zet in de instellingen eerst plekken aan."
     : toetsOn(r) ? `${r.toets.name}: ${n} plekken` : `${n} plekken staan aan`;
   $("play").disabled = !n;
@@ -319,7 +332,7 @@ function startQuiz() {
   roundSize = Math.min(settings.length || pool.length, pool.length);
   queue = shuffle(pool.slice()).slice(0, roundSize).map(p => ({ ...p, style: styleFor(p) }));
   idx = 0; score = 0;
-  drawMap(r); drawMarkers(r, pool); renderLegend(pool);
+  drawMap(r); drawRegions(pool); drawMarkers(r, pool); renderLegend(pool);
   $("quizPanel").hidden = false; $("editor").hidden = true;
   $("score").textContent = "";
   show("game");
@@ -331,7 +344,7 @@ function ask() {
   $("progress").textContent = `Vraag ${idx + 1} van ${roundSize}`;
   const r = region();
   if (current.style === "name") {
-    $("question").textContent = current.kind === "country" ? `Waar ligt ${current.name}?` : `Waar is ${current.name}?`;
+    $("question").textContent = current.kind === "country" ? `Waar ligt ${current.name}?` : current.plural ? `Waar liggen ${current.name}?` : `Waar is ${current.name}?`;
     say("plain", "Tik op de kaart.");
   } else if (current.style === "clue") {
     $("question").textContent = current.q;
@@ -341,6 +354,7 @@ function ask() {
     else {
       $("question").textContent = "Hoe heet de plek die blauw is aangegeven?";
       if (current.kind === "country") document.querySelector(`.country[data-id="${current.id}"]`).classList.add("ask");
+      if (current.d && regionNode(current)) regionNode(current).classList.add("ask");
       if (current.at && (current.kind === "feature" || settings.marks)) ringMarker(r, current, "#4a7fd6");
     }
     say("plain", "Kies het goede antwoord.");
@@ -358,10 +372,10 @@ function pick(p, button) {
   if (answered || !current) return;
   const r = region(), hit = p.key === current.key;
   overlay.innerHTML = "";                                  // drop the blue "which place?" ring, keep the buttons
-  document.querySelectorAll(".country.ask").forEach(n => n.classList.remove("ask"));
+  document.querySelectorAll(".country.ask,.region-area.ask").forEach(n => n.classList.remove("ask"));
   [...$("choices").children].forEach(b => { b.disabled = true; if (b.textContent === cap(current.name)) b.classList.add("good"); });
   reveal(r, current, true);
-  if (hit) say("good", "Goed zo!", `Het is ${current.name}.`);
+  if (hit) say("good", "Goed zo!", `${current.plural ? "Het zijn" : "Het is"} ${current.name}.`);
   else {
     button.classList.add("bad"); reveal(r, p, false);
     say("bad", "Niet helemaal", `Het goede antwoord is ${current.name}. Die staat nu groen op de kaart.`);
@@ -451,35 +465,42 @@ svg.addEventListener("pointerup", evt => {
     if (target.classList.contains("territory")) { say("hint", "Dat is een ander gebied", "Probeer opnieuw!"); return; }
     const hit = target.dataset.id === current.id;
     reveal(r, current, true);
-    if (hit) say("good", "Goed zo!", `Dat is ${current.name}.`);
+    if (hit) say("good", "Goed zo!", `${current.plural ? "Dat zijn" : "Dat is"} ${current.name}.`);
     else {
       target.classList.add("wrong"); crossMark(r, pt.x, pt.y);
+      const sq = pool.find(p => p.key === "c:" + target.dataset.id);
+      if (sq && sq.at && settings.marks) ringMarker(r, sq, "#e0566b");
       const named = r.countries.find(c => c.code === target.dataset.id);
       say("bad", "Niet helemaal", `${named ? "Je tikte op " + named.name + ". " : ""}Het groene land is ${current.name}.`);
     }
     finish(hit);
   } else if (settings.marks) {
-    const m = evt.target.closest && evt.target.closest("[data-key]");
-    const tapped = m && m.dataset.key;
-    if (!tapped) { say("hint", "Tik op een teken", "Zoek het juiste teken op de kaart."); return; }
+    const m = evt.target.closest && evt.target.closest("#markers [data-key]");
+    const inRegion = !!(current.d && document.elementsFromPoint(evt.clientX, evt.clientY).includes(regionNode(current)));
+    const tapped = m ? m.dataset.key : inRegion ? current.key : null;
+    // a region question counts any touch; other questions need a marker
+    if (!tapped && !current.d) { say("hint", "Tik op een teken", "Zoek het juiste teken op de kaart."); return; }
     const hit = tapped === current.key;
-    ringMarker(r, current, "#3cb371");
-    if (hit) say("good", "Goed zo!", `Dat is ${current.name}.`);
+    reveal(r, current, true);
+    if (hit) say("good", "Goed zo!", `${current.plural ? "Dat zijn" : "Dat is"} ${current.name}.`);
     else {
-      const other = pool.find(p => p.key === tapped);
-      if (other) { ringMarker(r, other, "#e0566b"); crossMark(r, ...project(r, ...other.at)); }
-      say("bad", "Niet helemaal", `${other ? "Je tikte op " + other.name + ". " : ""}Het groene teken is ${current.name}.`);
+      const other = tapped && pool.find(p => p.key === tapped);
+      if (other) reveal(r, other, false);
+      crossMark(r, ...(other ? project(r, ...other.at) : [pt.x, pt.y]));
+      say("bad", "Niet helemaal", `${other ? "Je tikte op " + other.name + ". " : ""}${current.d ? "Het groene gebied" : "Het groene teken"} is ${current.name}.`);
     }
     finish(hit);
   } else {
-    const d = kmBetween(unproject(r, pt.x, pt.y), current.at), hit = d <= current.r;
+    const d = kmBetween(unproject(r, pt.x, pt.y), current.at);
+    const hit = d <= current.r || !!(current.d && document.elementsFromPoint(evt.clientX, evt.clientY).includes(regionNode(current)));
+    if (current.d) reveal(r, current, hit);
     const [ax, ay] = project(r, ...current.at);
     overlay.appendChild(el("circle", { cx: ax, cy: ay, r: kmToUnits(r, current.r), fill: hit ? "rgba(60,179,113,.30)" : "rgba(224,86,107,.22)", stroke: hit ? "#3cb371" : "#e0566b", "stroke-width": 2, "stroke-dasharray": "6 4" }));
     overlay.appendChild(dot(ax, ay, "#3cb371"));
     if (!hit) overlay.appendChild(el("line", { x1: pt.x, y1: pt.y, x2: ax, y2: ay, stroke: "#24303c", "stroke-width": 1.5, "stroke-dasharray": "4 3" }));
     if (hit) overlay.appendChild(dot(pt.x, pt.y, "#3cb371")); else crossMark(r, pt.x, pt.y);
     const away = Math.round(d / 10) * 10;
-    if (hit) say("good", "Goed zo!", `Dat is ${current.name}.`);
+    if (hit) say("good", "Goed zo!", `${current.plural ? "Dat zijn" : "Dat is"} ${current.name}.`);
     else say("bad", d < current.r * 2 ? "Bijna!" : "Helaas", `Je zat ongeveer ${away} km ernaast. De groene stip is de goede plek.`);
     finish(hit);
   }

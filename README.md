@@ -42,7 +42,9 @@ only runs over http/https.)
 3. Bump `CACHE` in `sw.js`, then reload.
 
 Feature `type` is one of `mountain`, `river`, `water`, `sight`, `area`, `island`, `volcano`.
-Keep markers about 3 map units apart or they overlap; `tools/build_regions.py` does not check this.
+Country squares are placed automatically (middle of the country, clear of other markers). Run
+`python3 tools/check_markers.py` after moving a Feature to see markers that overlap. A Feature can
+have `"shape"` (a region name from the Natural Earth regions file) so a touch anywhere inside it counts.
 
 ## Deploy
 
