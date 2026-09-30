@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Kaartquiz">
+<meta name="theme-color" content="#4a7fd6">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>Kaartquiz</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section id="home" class="screen">
+  <h1>Kaartquiz</h1>
+  <p>Kies een werelddeel en zoek de plek op de kaart.</p>
+  <div class="regions" id="regionCards"></div>
+  <button id="play">Spelen</button>
+  <p id="homeNote"></p>
+  <button id="openSettings" class="ghost">⚙️ Instellingen</button>
+</section>
+
+<section id="settings" class="screen" hidden>
+  <div class="bar"><h1>Instellingen</h1><button id="closeSettings">Klaar</button></div>
+  <h2>Werelddeel</h2>
+  <div class="seg" id="setRegion"></div>
+  <h2>Aantal vragen per ronde</h2>
+  <div class="seg" id="setLength"></div>
+  <div class="row"><label for="lenInput">Of kies zelf een aantal:</label> <input id="lenInput" type="number" inputmode="numeric" min="1" max="200" style="width:5em;font:inherit;padding:8px;border-radius:10px;border:2px solid rgba(120,140,160,.4);background:var(--card);color:var(--ink)"></div>
+  <h2>Zoeken naar plekken</h2>
+  <div class="seg" id="setMarks"></div>
+  <h2>Landen <span class="count" id="countCountries"></span></h2>
+  <div class="row"><button class="ghost" data-bulk="countries:on">Alles aan</button><button class="ghost" data-bulk="countries:off">Alles uit</button></div>
+  <div class="list" id="listCountries"></div>
+  <h2>Plekken <span class="count" id="countFeatures"></span></h2>
+  <div class="row"><button class="ghost" data-bulk="features:on">Alles aan</button><button class="ghost" data-bulk="features:off">Alles uit</button></div>
+  <div class="list" id="listFeatures"></div>
+  <h2>Eigen plekken</h2>
+  <div class="list" id="listCustom"></div>
+  <div class="row"><button id="addCustom">＋ Eigen plek toevoegen</button></div>
+</section>
+
+<section id="game" class="screen" hidden>
+  <div id="side">
+    <button id="backbtn" class="ghost">‹ Stoppen</button>
+    <div id="quizPanel">
+      <div id="progress"></div>
+      <div id="question"></div>
+      <div id="feedback"></div>
+      <div id="score"></div>
+      <button id="next" hidden>Volgende</button>
+      <div id="legend"></div>
+    </div>
+    <div id="editor" hidden>
+      <div style="font-size:1.6rem;font-weight:800">Nieuwe plek</div>
+      <label for="cName">Naam</label>
+      <input id="cName" type="text" maxlength="40" placeholder="Bijvoorbeeld: Opa's huis">
+      <label>Wat is het?</label>
+      <div class="seg" id="cType"></div>
+      <label>Hoe groot is de plek?</label>
+      <div class="seg" id="cSize"></div>
+      <p id="editorHint">Tik op de kaart waar de plek ligt.</p>
+      <div class="row"><button id="cSave" disabled>Opslaan</button><button id="cCancel" class="ghost">Annuleren</button></div>
+    </div>
+  </div>
+  <div id="mapwrap">
+    <svg id="map" xmlns="http://www.w3.org/2000/svg">
+      <defs><clipPath id="frame"><rect id="clipRect" rx="14"/></clipPath></defs>
+      <rect class="sea" id="seaRect" rx="14"/>
+      <g id="land" clip-path="url(#frame)"></g>
+      <g id="markers" clip-path="url(#frame)"></g>
+      <g id="overlay" clip-path="url(#frame)"></g>
+    </svg>
+  </div>
+</section>
+
+<script src="regions/south-america.js"></script>
+<script src="regions/asia.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
