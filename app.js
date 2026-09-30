@@ -98,7 +98,14 @@ function drawMarkers(r) {
 }
 function ringMarker(r, p, color) {
   const [x, y] = project(r, ...p.at);
-  overlay.appendChild(el("circle", { cx: x, cy: y, r: markerSize(r) * 2, fill: "none", stroke: color, "stroke-width": 3 }));
+  overlay.appendChild(el("circle", { class: "ring", cx: x, cy: y, r: markerSize(r) * 2, fill: "none", stroke: color, "stroke-width": 3 }));
+}
+// A red cross where she touched, so a wrong answer is easy to see.
+function crossMark(r, x, y) {
+  const s = markerSize(r) * 1.1, g = el("g", { class: "ring" });
+  g.append(el("circle", { cx: x, cy: y, r: s * 1.5, fill: "#e0566b", stroke: "#fff", "stroke-width": 2 }),
+    el("path", { d: `M${x - s * .7} ${y - s * .7}L${x + s * .7} ${y + s * .7}M${x + s * .7} ${y - s * .7}L${x - s * .7} ${y + s * .7}`, stroke: "#fff", "stroke-width": 3, "stroke-linecap": "round" }));
+  overlay.appendChild(g);
 }
 function renderLegend() {
   const box = $("legend"); box.innerHTML = "";
@@ -242,6 +249,17 @@ $("cSave").onclick = () => {
 };
 
 // ---------- quiz ----------
+// Result card: colour and icon tell right / wrong / skipped / try-again at a glance.
+const ICONS = { good: "✓", bad: "✗", skip: "➜", hint: "!" };
+function say(kind, title, detail = "") {
+  const f = $("feedback");
+  f.className = "fb " + kind;
+  f.replaceChildren();
+  if (kind === "plain") { f.className = ""; f.textContent = title; return; }
+  const body = h("div", {}, h("b", { textContent: title }));
+  if (detail) body.append(h("span", { textContent: detail }));
+  f.append(h("i", { className: "fb-icon", textContent: ICONS[kind] }), body);
+}
 let queue, idx, score, current, answered, roundSize;
 
 function startQuiz() {
@@ -263,7 +281,7 @@ function ask() {
   current = queue[idx]; answered = false;
   $("progress").textContent = `Vraag ${idx + 1} van ${roundSize}`;
   $("question").textContent = current.kind === "country" ? `Waar ligt ${current.name}?` : `Waar is ${current.name}?`;
-  $("feedback").textContent = "Tik op de kaart.";
+  say("plain", "Tik op de kaart.");
   $("next").hidden = true;
   $("skip").hidden = false;
 }
@@ -303,7 +321,7 @@ $("skip").onclick = () => {
     overlay.appendChild(el("circle", { cx: ax, cy: ay, r: kmToUnits(r, current.r), fill: "rgba(60,179,113,.30)", stroke: "#3cb371", "stroke-width": 2, "stroke-dasharray": "6 4" }));
     overlay.appendChild(dot(ax, ay, "#3cb371"));
   }
-  $("feedback").textContent = `Overgeslagen. Dit is ${current.name}.`;
+  say("skip", "Overgeslagen", `Dit is ${current.name}.`);
   finish(false);
 };
 $("next").onclick = () => {
@@ -318,6 +336,7 @@ function endRound() {
   const ratio = score / roundSize, stars = ratio >= .9 ? 3 : ratio >= .6 ? 2 : ratio >= .3 ? 1 : 0;
   $("progress").textContent = "Einde!";
   $("question").textContent = `${score} van ${roundSize} goed`;
+  $("feedback").className = "";
   $("feedback").innerHTML = `<div class="stars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</div>`;
   $("score").textContent = "";
   $("next").textContent = "Opnieuw spelen"; $("next").dataset.act = "again"; $("next").hidden = false;
@@ -344,24 +363,28 @@ svg.addEventListener("pointerup", evt => {
 
   const target = evt.target.closest && evt.target.closest("[data-id]");
   if (current.kind === "country") {
-    if (!target) { $("feedback").textContent = "Dat is zee. Probeer opnieuw!"; return; }
-    if (target.classList.contains("territory")) { $("feedback").textContent = "Dat is een ander gebied. Probeer opnieuw!"; return; }
+    if (!target) { say("hint", "Dat is zee", "Probeer opnieuw!"); return; }
+    if (target.classList.contains("territory")) { say("hint", "Dat is een ander gebied", "Probeer opnieuw!"); return; }
     const hit = target.dataset.id === current.id;
     document.querySelector(`.country[data-id="${current.id}"]`).classList.add("right");
-    if (hit) $("feedback").textContent = "Goed zo! 🎉";
-    else { target.classList.add("wrong"); overlay.appendChild(dot(pt.x, pt.y)); $("feedback").textContent = `Niet helemaal. Dit is ${current.name}.`; }
+    if (hit) say("good", "Goed zo!", `Dat is ${current.name}.`);
+    else {
+      target.classList.add("wrong"); crossMark(r, pt.x, pt.y);
+      const named = r.countries.find(c => c.code === target.dataset.id);
+      say("bad", "Niet helemaal", `${named ? "Je tikte op " + named.name + ". " : ""}Het groene land is ${current.name}.`);
+    }
     finish(hit);
   } else if (settings.marks) {
     const m = evt.target.closest && evt.target.closest("[data-fid]");
     const tapped = m && m.dataset.fid;
-    if (!tapped) { $("feedback").textContent = "Tik op een teken op de kaart."; return; }
+    if (!tapped) { say("hint", "Tik op een teken", "Zoek het juiste teken op de kaart."); return; }
     const hit = tapped === current.id;
     ringMarker(r, current, "#3cb371");
-    if (hit) $("feedback").textContent = "Goed zo! 🎉";
+    if (hit) say("good", "Goed zo!", `Dat is ${current.name}.`);
     else {
       const other = enabled(r).find(p => p.kind === "feature" && p.id === tapped);
-      if (other) ringMarker(r, other, "#e0566b");
-      $("feedback").textContent = `Niet helemaal${other ? ": je tikte op " + other.name : ""}. Het groene teken is ${current.name}.`;
+      if (other) { ringMarker(r, other, "#e0566b"); crossMark(r, ...project(r, ...other.at)); }
+      say("bad", "Niet helemaal", `${other ? "Je tikte op " + other.name + ". " : ""}Het groene teken is ${current.name}.`);
     }
     finish(hit);
   } else {
@@ -370,9 +393,10 @@ svg.addEventListener("pointerup", evt => {
     overlay.appendChild(el("circle", { cx: ax, cy: ay, r: kmToUnits(r, current.r), fill: hit ? "rgba(60,179,113,.30)" : "rgba(224,86,107,.22)", stroke: hit ? "#3cb371" : "#e0566b", "stroke-width": 2, "stroke-dasharray": "6 4" }));
     overlay.appendChild(dot(ax, ay, "#3cb371"));
     if (!hit) overlay.appendChild(el("line", { x1: pt.x, y1: pt.y, x2: ax, y2: ay, stroke: "#24303c", "stroke-width": 1.5, "stroke-dasharray": "4 3" }));
-    overlay.appendChild(dot(pt.x, pt.y));
+    if (hit) overlay.appendChild(dot(pt.x, pt.y, "#3cb371")); else crossMark(r, pt.x, pt.y);
     const away = Math.round(d / 10) * 10;
-    $("feedback").textContent = hit ? "Goed zo! 🎉" : `${d < current.r * 2 ? "Bijna!" : "Helaas."} Je zat ongeveer ${away} km ernaast. De groene stip is de goede plek.`;
+    if (hit) say("good", "Goed zo!", `Dat is ${current.name}.`);
+    else say("bad", d < current.r * 2 ? "Bijna!" : "Helaas", `Je zat ongeveer ${away} km ernaast. De groene stip is de goede plek.`);
     finish(hit);
   }
 });

@@ -63,6 +63,22 @@ svg#map { height: 100%; max-width: 100%; touch-action: manipulation; }
 #progress { color: var(--muted); }
 #question { font-size: clamp(1.6rem, 3.2vw, 2.4rem); font-weight: 800; line-height: 1.15; }
 #feedback { min-height: 3.2em; font-size: 1.15rem; }
+.fb { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 20px; min-height: 0; border: 3px solid;
+  animation: pop .28s ease-out; --fb: var(--accent); background: color-mix(in srgb, var(--fb) 16%, var(--card)); border-color: var(--fb); }
+.fb b { display: block; font-size: 1.35rem; color: var(--fb); }
+.fb span { display: block; font-size: 1rem; }
+.fb-icon { flex: none; width: 46px; height: 46px; border-radius: 50%; background: var(--fb); color: #fff; font-style: normal;
+  font-weight: 900; font-size: 1.7rem; display: grid; place-items: center; }
+.fb.good { --fb: #2e9e5b; }
+.fb.bad { --fb: #d64560; animation: pop .28s ease-out, shake .4s .05s; }
+.fb.skip { --fb: #7a6bd6; }
+.fb.hint { --fb: #e0932b; }
+@keyframes pop { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+@keyframes ringpulse { from { transform: scale(.4); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } to { transform: scale(1); opacity: 1; } }
+@keyframes glow { 0% { filter: brightness(1.7); } 100% { filter: brightness(1); } }
+#overlay .ring { transform-box: fill-box; transform-origin: center; animation: ringpulse .45s ease-out; }
+.country.right, .country.wrong { animation: glow .6s ease-out; }
 #score { font-weight: 700; }
 .stars { font-size: 2.4rem; letter-spacing: 4px; }
 #editor label { display: block; font-weight: 700; margin: 6px 0; }
@@ -75,6 +91,7 @@ svg#map { height: 100%; max-width: 100%; touch-action: manipulation; }
   #side { width: 100%; padding: max(10px, env(safe-area-inset-top)) 16px 4px; gap: 6px; flex: none; justify-content: flex-start; }
   #question { font-size: 1.35rem; }
   #feedback { min-height: 2.4em; font-size: 1rem; }
+  .fb { padding: 8px 12px; gap: 10px; } .fb b { font-size: 1.1rem; } .fb-icon { width: 34px; height: 34px; font-size: 1.2rem; }
   #mapwrap { flex: 1; min-height: 0; }
 }
 
