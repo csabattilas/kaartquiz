@@ -90,6 +90,7 @@ def build(cfg):
         'lon0': b['lonMin'], 'lat0': b['latMax'],
         'countries': cfg['countries'], 'features': cfg['features'], 'shapes': shapes,
         'rivers': river_paths, 'lakes': lake_paths, 'ranges': range_paths,
+        'toets': cfg.get('toets'),
     }
 
 

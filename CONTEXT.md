@@ -44,6 +44,14 @@ _Avoid_: User landmark, own landmark
 A run of Questions drawn at random, without repeats, from the Places switched on in Settings.
 _Avoid_: Game, session, level
 
+**Toets list**:
+The fixed set of Places from the child's school worksheet (Mondus Novus 2, 28 Places), each with a question text taken from the worksheet; when chosen in Settings, a Round uses only these.
+_Avoid_: Test set, exam
+
+**Question style**:
+How a Question is put: by name ("Waar ligt Peru?"), by description from the worksheet text (then touch the map), or as multiple choice (pick the name from four).
+_Avoid_: Question type, mode
+
 **Question**:
 One prompt asking the child to find a Place.
 

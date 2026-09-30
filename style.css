@@ -104,5 +104,12 @@ svg#map { height: 100%; max-width: 100%; touch-action: manipulation; }
 
 #physical path { pointer-events: none; }
 .range { fill: rgba(120, 82, 44, .28); stroke: none; }
-.lake { fill: var(--sea); stroke: #4f97cf; stroke-width: .8; }
-.river { fill: none; stroke: #3b8fd6; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.lake { fill: var(--sea); stroke: #4f97cf; stroke-opacity: .4; stroke-width: .6; }
+.river { fill: none; stroke: #3b8fd6; stroke-opacity: .4; stroke-width: 1.1; stroke-linecap: round; stroke-linejoin: round; }
+
+#choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+#choices:empty { display: none; }
+#choices .choice { font-size: 1.1rem; padding: 14px 10px; }
+#choices .choice.good { background: #2e9e5b; color: #fff; box-shadow: none; opacity: 1; }
+#choices .choice.bad { background: #d64560; color: #fff; box-shadow: none; opacity: 1; }
+.country.ask { fill: #7fa8e8; }

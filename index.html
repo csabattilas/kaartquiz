@@ -29,6 +29,12 @@
   <div class="bar"><h1>Instellingen</h1><button id="closeSettings">Klaar</button></div>
   <h2>Werelddeel</h2>
   <div class="seg" id="setRegion"></div>
+  <div id="setBox">
+    <h2>Welke plekken?</h2>
+    <div class="seg" id="setSet"></div>
+  </div>
+  <h2>Soort vragen</h2>
+  <div class="seg" id="setStyle"></div>
   <h2>Aantal vragen per ronde</h2>
   <div class="seg" id="setLength"></div>
   <div class="row"><label for="lenInput">Of kies zelf een aantal:</label> <input id="lenInput" type="number" inputmode="numeric" min="1" max="200" style="width:5em;font:inherit;padding:8px;border-radius:10px;border:2px solid rgba(120,140,160,.4);background:var(--card);color:var(--ink)"></div>
@@ -38,12 +44,14 @@
   <div class="seg" id="setDetail"></div>
   <h2>Zoeken naar plekken</h2>
   <div class="seg" id="setMarks"></div>
+  <div id="pickLists">
   <h2>Landen <span class="count" id="countCountries"></span></h2>
   <div class="row"><button class="ghost" data-bulk="countries:on">Alles aan</button><button class="ghost" data-bulk="countries:off">Alles uit</button></div>
   <div class="list" id="listCountries"></div>
   <h2>Plekken <span class="count" id="countFeatures"></span></h2>
   <div class="row"><button class="ghost" data-bulk="features:on">Alles aan</button><button class="ghost" data-bulk="features:off">Alles uit</button></div>
   <div class="list" id="listFeatures"></div>
+  </div>
   <h2>Eigen plekken</h2>
   <div class="list" id="listCustom"></div>
   <div class="row"><button id="addCustom">＋ Eigen plek toevoegen</button></div>
@@ -55,6 +63,7 @@
     <div id="quizPanel">
       <div id="progress"></div>
       <div id="question"></div>
+      <div id="choices"></div>
       <div id="feedback"></div>
       <div id="score"></div>
       <button id="next" hidden>Volgende</button>

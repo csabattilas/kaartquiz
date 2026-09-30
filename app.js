@@ -8,17 +8,20 @@ const SIZES = [["Klein", 100], ["Middel", 250], ["Groot", 500]];
 const NS = "http://www.w3.org/2000/svg";
 
 const AUTO = [["Uit", 0], ["3 sec", 3], ["5 sec", 5], ["10 sec", 10]];   // wait after an answer, then go on by itself
-const defaults = () => ({ region: REGIONS[0].id, length: 10, marks: true, auto: 0, detail: true, off: {}, custom: {} });
-// Symbol per kind of Feature; the map shows only the symbol, never the name.
+const defaults = () => ({ region: REGIONS[0].id, length: 10, marks: true, auto: 0, detail: true, set: "all", style: "name", off: {}, custom: {} });
+// Symbol per kind of Feature, following the legend on the Mondus Novus worksheet:
+// square = land/gebied, circle = stad/plaats, diamond = water, triangle = gebergte.
+// The map shows only the symbol, never the name.
 const TYPES = {
-  mountain: { label: "berg / gebergte", color: "#8b5a2b" },
-  river:    { label: "rivier", color: "#2f7fd0" },
-  water:    { label: "meer / zee / waterval", color: "#2f7fd0" },
-  sight:    { label: "stad / bezienswaardigheid", color: "#c0392b" },
-  area:     { label: "gebied / woestijn", color: "#2e8b57" },
+  area:     { label: "land / gebied", color: "#2e9e5b" },
+  sight:    { label: "stad / plaats", color: "#d64560" },
+  river:    { label: "water", color: "#2f8fe0" },
+  water:    { label: "water", color: "#2f8fe0" },
+  mountain: { label: "gebergte", color: "#e08a3c" },
   island:   { label: "eiland", color: "#159a9c" },
   volcano:  { label: "vulkaan", color: "#e0561e" },
 };
+const STYLES = [["Waar ligt …?", "name"], ["Omschrijving, tik op de kaart", "clue"], ["Meerkeuze", "choice"], ["Gemengd", "mix"]];
 let settings = load();
 
 function load() {
@@ -48,6 +51,16 @@ function setOn(r, p, on) {
   save();
 }
 const enabled = r => placesOf(r).filter(p => isOn(r, p));
+const toetsOn = r => settings.set === "toets" && !!r.toets;
+// The Places a Round draws from: the worksheet list, or everything switched on in Settings.
+function poolOf(r) {
+  if (!toetsOn(r)) return enabled(r);
+  const all = placesOf(r);
+  return r.toets.places.map(t => {
+    const p = all.find(x => x.key === t.ref);
+    return p.kind === "country" ? { ...p, type: "area", at: t.at, q: t.q } : { ...p, q: t.q };
+  });
+}
 
 // ---------- helpers ----------
 const $ = id => document.getElementById(id);
@@ -74,11 +87,10 @@ const kmBetween = (a, b) => {
   return 12742 * Math.asin(Math.sqrt(s));
 };
 function symbol(type, x, y, s) {
-  const color = (TYPES[type] || TYPES.area).color, a = { fill: color, stroke: "#fff", "stroke-width": 2, "stroke-linejoin": "round" };
+  const color = (TYPES[type] || TYPES.area).color, a = { fill: "#1c1f24", stroke: color, "stroke-width": s * .45, "stroke-linejoin": "round" };
   switch (type) {
     case "mountain": return el("polygon", { ...a, points: `${x},${y - s} ${x + s * 1.1},${y + s * .8} ${x - s * 1.1},${y + s * .8}` });
-    case "river":    return el("polygon", { ...a, points: `${x},${y - s * 1.15} ${x + s * .85},${y} ${x},${y + s * 1.15} ${x - s * .85},${y}` });
-    case "water":    return el("circle", { ...a, cx: x, cy: y, r: s });
+    case "river": case "water": return el("polygon", { ...a, points: `${x},${y - s * 1.15} ${x + s * .85},${y} ${x},${y + s * 1.15} ${x - s * .85},${y}` });
     case "island":   return el("polygon", { ...a, points: [0, 1, 2, 3, 4, 5].map(i => `${x + s * 1.15 * Math.cos(i * Math.PI / 3)},${y + s * 1.15 * Math.sin(i * Math.PI / 3)}`).join(" ") });
     case "volcano":  return el("polygon", { ...a, points: `${x - s * 1.1},${y - s * .8} ${x + s * 1.1},${y - s * .8} ${x},${y + s}` });
     case "sight":    return el("circle", { ...a, cx: x, cy: y, r: s });
@@ -87,14 +99,14 @@ function symbol(type, x, y, s) {
 }
 const markerSize = r => r.width * 0.011;
 function markerNode(r, p, x, y) {
-  const s = markerSize(r), g = el("g", { class: "marker", "data-fid": p.id });
+  const s = markerSize(r), g = el("g", { class: "marker", "data-key": p.key });
   g.append(el("circle", { class: "hit", cx: x, cy: y, r: s * 2.2 }), symbol(p.type, x, y, s));
   return g;
 }
-function drawMarkers(r) {
+function drawMarkers(r, pool) {
   const box = $("markers"); box.innerHTML = "";
   if (!settings.marks) return;
-  enabled(r).filter(p => p.kind === "feature").forEach(p => box.appendChild(markerNode(r, p, ...project(r, ...p.at))));
+  pool.filter(p => p.at).forEach(p => box.appendChild(markerNode(r, p, ...project(r, ...p.at))));
 }
 function ringMarker(r, p, color) {
   const [x, y] = project(r, ...p.at);
@@ -107,13 +119,21 @@ function crossMark(r, x, y) {
     el("path", { d: `M${x - s * .7} ${y - s * .7}L${x + s * .7} ${y + s * .7}M${x + s * .7} ${y - s * .7}L${x - s * .7} ${y + s * .7}`, stroke: "#fff", "stroke-width": 3, "stroke-linecap": "round" }));
   overlay.appendChild(g);
 }
-function renderLegend() {
+function renderLegend(pool) {
   const box = $("legend"); box.innerHTML = "";
   if (!settings.marks) return;
+  const seen = new Set();
   Object.entries(TYPES).forEach(([type, t]) => {
+    if (seen.has(t.label) || !pool.some(p => p.at && p.type === type)) return;
+    seen.add(t.label);
     const s = el("svg", { viewBox: "-12 -12 24 24" }); s.appendChild(symbol(type, 0, 0, 7));
     box.appendChild(h("span", {}, s, t.label));
   });
+}
+// Show a Place on the map: a country is coloured, a Feature gets a ring round its marker.
+function reveal(r, p, good) {
+  if (p.kind === "country") document.querySelector(`.country[data-id="${p.id}"]`).classList.add(good ? "right" : "wrong");
+  if (p.at && (p.kind === "feature" || settings.marks)) ringMarker(r, p, good ? "#3cb371" : "#e0566b");
 }
 const kmToUnits = (r, km) => km / 111.32 * r.k;       // 1° latitude ≈ 111.32 km
 
@@ -139,7 +159,8 @@ function drawPhysical(r) {
 }
 function clearMarks() {
   overlay.innerHTML = "";
-  document.querySelectorAll(".country.right,.country.wrong").forEach(n => n.classList.remove("right", "wrong"));
+  document.querySelectorAll(".country.right,.country.wrong,.country.ask").forEach(n => n.classList.remove("right", "wrong", "ask"));
+  $("choices").replaceChildren();
 }
 function svgPoint(evt) {
   const p = svg.createSVGPoint(); p.x = evt.clientX; p.y = evt.clientY;
@@ -156,8 +177,9 @@ function renderHome() {
     b.onclick = () => { settings.region = r.id; save(); renderHome(); };
     cards.appendChild(b);
   });
-  const n = enabled(region()).length;
-  $("homeNote").textContent = n ? `${n} plekken staan aan` : "Zet in de instellingen eerst plekken aan.";
+  const r = region(), n = poolOf(r).length;
+  $("homeNote").textContent = !n ? "Zet in de instellingen eerst plekken aan."
+    : toetsOn(r) ? `${r.toets.name}: ${n} plekken` : `${n} plekken staan aan`;
   $("play").disabled = !n;
 }
 $("play").onclick = startQuiz;
@@ -180,6 +202,10 @@ function renderSettings() {
 
   $("lenInput").value = settings.length || "";
   $("lenInput").placeholder = settings.length ? "" : "alles";
+  $("setBox").hidden = !r.toets;
+  if (r.toets) seg($("setSet"), [["Alle plekken", "all"], [r.toets.name, "toets"]], v => v === settings.set, v => { settings.set = v; save(); renderSettings(); });
+  $("pickLists").hidden = toetsOn(r);
+  seg($("setStyle"), STYLES, v => v === settings.style, v => { settings.style = v; save(); renderSettings(); });
   seg($("setAuto"), AUTO, v => v === settings.auto, v => { settings.auto = v; save(); renderSettings(); });
   seg($("setDetail"), [["Met rivieren en bergen", true], ["Alleen landen", false]], v => v === settings.detail, v => { settings.detail = v; save(); renderSettings(); });
   seg($("setMarks"), [["Met tekens op de kaart", true], ["Zonder tekens (tik op de plek)", false]], v => v === settings.marks, v => { settings.marks = v; save(); renderSettings(); });
@@ -247,7 +273,7 @@ function drawDraft() {
   if (!draft.at) return;
   const [x, y] = project(region(), ...draft.at);
   if (!settings.marks) overlay.appendChild(el("circle", { cx: x, cy: y, r: kmToUnits(region(), draft.r), fill: "rgba(74,127,214,.25)", stroke: "#4a7fd6", "stroke-width": 2, "stroke-dasharray": "6 4" }));
-  overlay.appendChild(markerNode(region(), { id: "draft", type: draft.type }, x, y));
+  overlay.appendChild(markerNode(region(), { key: "draft", type: draft.type }, x, y));
 }
 const updateSave = () => $("cSave").disabled = !(draft && draft.at && $("cName").value.trim());
 $("cName").oninput = updateSave;
@@ -270,17 +296,30 @@ function say(kind, title, detail = "") {
   if (detail) body.append(h("span", { textContent: detail }));
   f.append(h("i", { className: "fb-icon", textContent: ICONS[kind] }), body);
 }
-let queue, idx, score, current, answered, roundSize;
+let queue, idx, score, current, answered, roundSize, pool;
+// A description question needs a worksheet text; without one it falls back to "Waar ligt …?".
+function styleFor(p) {
+  const s = settings.style === "mix" ? shuffle(p.q ? ["name", "clue", "choice"] : ["name", "choice"])[0] : settings.style;
+  return s === "clue" && !p.q ? "name" : s;
+}
+const groupOf = p => p.kind === "country" ? "country" : (TYPES[p.type] || TYPES.area).label;
+// Three wrong answers of the same kind (cities with cities, countries with countries) plus the right one.
+function choicesFor(p) {
+  const others = shuffle(pool.filter(x => x.key !== p.key));
+  const same = others.filter(x => groupOf(x) === groupOf(p)), rest = others.filter(x => groupOf(x) !== groupOf(p));
+  return shuffle([p, ...[...same, ...rest].slice(0, 3)]);
+}
 
 function startQuiz() {
   clearAuto();
-  const r = region(), pool = enabled(r);
+  const r = region();
+  pool = poolOf(r);
   if (!pool.length) return;
   mode = "quiz";
   roundSize = Math.min(settings.length || pool.length, pool.length);
-  queue = shuffle(pool.slice()).slice(0, roundSize);
+  queue = shuffle(pool.slice()).slice(0, roundSize).map(p => ({ ...p, style: styleFor(p) }));
   idx = 0; score = 0;
-  drawMap(r); drawMarkers(r); renderLegend();
+  drawMap(r); drawMarkers(r, pool); renderLegend(pool);
   $("quizPanel").hidden = false; $("editor").hidden = true;
   $("score").textContent = "";
   show("game");
@@ -290,10 +329,44 @@ function ask() {
   clearMarks();
   current = queue[idx]; answered = false;
   $("progress").textContent = `Vraag ${idx + 1} van ${roundSize}`;
-  $("question").textContent = current.kind === "country" ? `Waar ligt ${current.name}?` : `Waar is ${current.name}?`;
-  say("plain", "Tik op de kaart.");
+  const r = region();
+  if (current.style === "name") {
+    $("question").textContent = current.kind === "country" ? `Waar ligt ${current.name}?` : `Waar is ${current.name}?`;
+    say("plain", "Tik op de kaart.");
+  } else if (current.style === "clue") {
+    $("question").textContent = current.q;
+    say("plain", "Tik het goede antwoord aan op de kaart.");
+  } else {
+    if (current.q) $("question").textContent = current.q;
+    else {
+      $("question").textContent = "Hoe heet de plek die blauw is aangegeven?";
+      if (current.kind === "country") document.querySelector(`.country[data-id="${current.id}"]`).classList.add("ask");
+      if (current.at && (current.kind === "feature" || settings.marks)) ringMarker(r, current, "#4a7fd6");
+    }
+    say("plain", "Kies het goede antwoord.");
+    choicesFor(current).forEach(p => {
+      const b = h("button", { className: "choice ghost", textContent: cap(p.name) });
+      b.onclick = () => pick(p, b);
+      $("choices").appendChild(b);
+    });
+  }
   $("next").hidden = true;
   $("skip").hidden = false;
+}
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+function pick(p, button) {
+  if (answered || !current) return;
+  const r = region(), hit = p.key === current.key;
+  overlay.innerHTML = "";                                  // drop the blue "which place?" ring, keep the buttons
+  document.querySelectorAll(".country.ask").forEach(n => n.classList.remove("ask"));
+  [...$("choices").children].forEach(b => { b.disabled = true; if (b.textContent === cap(current.name)) b.classList.add("good"); });
+  reveal(r, current, true);
+  if (hit) say("good", "Goed zo!", `Het is ${current.name}.`);
+  else {
+    button.classList.add("bad"); reveal(r, p, false);
+    say("bad", "Niet helemaal", `Het goede antwoord is ${current.name}. Die staat nu groen op de kaart.`);
+  }
+  finish(hit);
 }
 function finish(hit) {
   answered = true;
@@ -324,8 +397,8 @@ function startAuto() {
 $("skip").onclick = () => {
   if (answered || !current) return;
   const r = region();
-  if (current.kind === "country") document.querySelector(`.country[data-id="${current.id}"]`).classList.add("right");
-  else if (settings.marks) ringMarker(r, current, "#3cb371");
+  clearMarks();
+  if (current.kind === "country" || settings.marks) reveal(r, current, true);
   else {
     const [ax, ay] = project(r, ...current.at);
     overlay.appendChild(el("circle", { cx: ax, cy: ay, r: kmToUnits(r, current.r), fill: "rgba(60,179,113,.30)", stroke: "#3cb371", "stroke-width": 2, "stroke-dasharray": "6 4" }));
@@ -369,7 +442,7 @@ svg.addEventListener("pointerup", evt => {
     $("editorHint").textContent = "Klopt de plek? Tik opnieuw om te verplaatsen.";
     return;
   }
-  if (answered || !current) return;
+  if (answered || !current || current.style === "choice") return;
 
   // Markers sit on top of the land, so look through them to the country underneath.
   const target = document.elementsFromPoint(evt.clientX, evt.clientY).find(n => n.dataset && n.dataset.id && n.closest("#land")) || null;
@@ -377,7 +450,7 @@ svg.addEventListener("pointerup", evt => {
     if (!target) { say("hint", "Dat is zee", "Probeer opnieuw!"); return; }
     if (target.classList.contains("territory")) { say("hint", "Dat is een ander gebied", "Probeer opnieuw!"); return; }
     const hit = target.dataset.id === current.id;
-    document.querySelector(`.country[data-id="${current.id}"]`).classList.add("right");
+    reveal(r, current, true);
     if (hit) say("good", "Goed zo!", `Dat is ${current.name}.`);
     else {
       target.classList.add("wrong"); crossMark(r, pt.x, pt.y);
@@ -386,14 +459,14 @@ svg.addEventListener("pointerup", evt => {
     }
     finish(hit);
   } else if (settings.marks) {
-    const m = evt.target.closest && evt.target.closest("[data-fid]");
-    const tapped = m && m.dataset.fid;
+    const m = evt.target.closest && evt.target.closest("[data-key]");
+    const tapped = m && m.dataset.key;
     if (!tapped) { say("hint", "Tik op een teken", "Zoek het juiste teken op de kaart."); return; }
-    const hit = tapped === current.id;
+    const hit = tapped === current.key;
     ringMarker(r, current, "#3cb371");
     if (hit) say("good", "Goed zo!", `Dat is ${current.name}.`);
     else {
-      const other = enabled(r).find(p => p.kind === "feature" && p.id === tapped);
+      const other = pool.find(p => p.key === tapped);
       if (other) { ringMarker(r, other, "#e0566b"); crossMark(r, ...project(r, ...other.at)); }
       say("bad", "Niet helemaal", `${other ? "Je tikte op " + other.name + ". " : ""}Het groene teken is ${current.name}.`);
     }
