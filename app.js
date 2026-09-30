@@ -262,6 +262,7 @@ function ask() {
   $("question").textContent = current.kind === "country" ? `Waar ligt ${current.name}?` : `Waar is ${current.name}?`;
   $("feedback").textContent = "Tik op de kaart.";
   $("next").hidden = true;
+  $("skip").hidden = false;
 }
 function finish(hit) {
   answered = true;
@@ -270,7 +271,22 @@ function finish(hit) {
   $("next").textContent = idx === roundSize - 1 ? "Klaar!" : "Volgende";
   $("next").dataset.act = idx === roundSize - 1 ? "end" : "next";
   $("next").hidden = false;
+  $("skip").hidden = true;
 }
+// Skipping counts as not answered: show where it was, score nothing.
+$("skip").onclick = () => {
+  if (answered || !current) return;
+  const r = region();
+  if (current.kind === "country") document.querySelector(`.country[data-id="${current.id}"]`).classList.add("right");
+  else if (settings.marks) ringMarker(r, current, "#3cb371");
+  else {
+    const [ax, ay] = project(r, ...current.at);
+    overlay.appendChild(el("circle", { cx: ax, cy: ay, r: kmToUnits(r, current.r), fill: "rgba(60,179,113,.30)", stroke: "#3cb371", "stroke-width": 2, "stroke-dasharray": "6 4" }));
+    overlay.appendChild(dot(ax, ay, "#3cb371"));
+  }
+  $("feedback").textContent = `Overgeslagen. Dit is ${current.name}.`;
+  finish(false);
+};
 $("next").onclick = () => {
   const act = $("next").dataset.act;
   if (act === "end") return endRound();
@@ -285,6 +301,7 @@ function endRound() {
   $("feedback").innerHTML = `<div class="stars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</div>`;
   $("score").textContent = "";
   $("next").textContent = "Opnieuw spelen"; $("next").dataset.act = "again"; $("next").hidden = false;
+  $("skip").hidden = true;
   current = null;
 }
 $("backbtn").onclick = () => {
