@@ -373,7 +373,10 @@ const synth = window.speechSynthesis;
 let dutchVoice = null, voiceWarned = false, audioCtx = null;
 function pickVoice() {
   const vs = synth ? synth.getVoices() : [];
-  dutchVoice = vs.find(v => /^nl[-_]NL/i.test(v.lang)) || vs.find(v => /^nl/i.test(v.lang)) || null;
+  // prefer the better-sounding voices: Google / "natural" / online voices before the basic device voice
+  const nl = vs.filter(v => /^nl/i.test(v.lang));
+  const score = v => (/^nl[-_]NL/i.test(v.lang) ? 4 : 0) + (/natural|neural|google|online|premium|enhanced/i.test(v.name) ? 2 : 0) + (v.localService ? 0 : 1);
+  dutchVoice = nl.sort((x, y) => score(y) - score(x))[0] || null;
   return vs.length;
 }
 if (synth) { pickVoice(); synth.addEventListener && synth.addEventListener("voiceschanged", pickVoice); }
@@ -382,15 +385,25 @@ function spoken(text) {
   if (/_/.test(text)) return `Het woord heeft ${(text.match(/_/g) || []).length + 1} letters.`;
   return text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "").replace(/[“”]/g, "").trim();
 }
+// Chrome on Android drops or delays an utterance started right after cancel(), so: cancel, wait a
+// moment, then speak and nudge with resume(). A newer speak() call replaces a pending one.
+let speakToken = 0, lastSpeak = 0;
 function speak(text) {
   if (!settings.sound || !synth || !text) return;
-  synth.cancel();
-  const u = new SpeechSynthesisUtterance(spoken(text));
-  u.lang = "nl-NL"; u.rate = 0.9;
-  if (dutchVoice) u.voice = dutchVoice;
-  synth.speak(u);
+  const token = ++speakToken; lastSpeak = Date.now();
+  const go = () => {
+    if (token !== speakToken) return;
+    const u = new SpeechSynthesisUtterance(spoken(text));
+    u.lang = "nl-NL"; u.rate = 0.9;
+    if (dutchVoice) u.voice = dutchVoice;
+    synth.speak(u);
+    synth.resume();
+  };
+  if (synth.speaking || synth.pending) { synth.cancel(); setTimeout(go, 150); }
+  else go();
 }
-const hush = () => { if (synth) synth.cancel(); };
+const talking = () => !!(synth && settings.sound && (synth.speaking || synth.pending));
+const hush = () => { speakToken++; if (synth) synth.cancel(); };
 function effect(kind) {
   if (!settings.sound) return;
   try {
@@ -597,7 +610,8 @@ function submitTyped() {
   else say("bad", "Niet helemaal", `Je typte “${text}”. Het goede antwoord is ${cap(current.name)}.`);
   finish(hit);
 }
-$("typeGo").onclick = submitTyped;
+$("typeGo").addEventListener("pointerdown", e => { e.preventDefault(); submitTyped(); });
+$("typeGo").onclick = submitTyped;                    // keyboard / mouse fallback; a second call is ignored
 $("typeIn").addEventListener("keydown", e => { if (e.key === "Enter") submitTyped(); });
 
 // Second chance (setting): the first wrong answer only shows what was tapped and lets her try again.
@@ -701,10 +715,14 @@ function finish(hit) {
   startAuto();
 }
 let autoTimer = null;
-function clearAuto() { clearInterval(autoTimer); autoTimer = null; }
+function clearAuto() { clearInterval(autoTimer); clearTimeout(autoTimer); autoTimer = null; }
 function startAuto() {
   clearAuto();
   if (!settings.auto) return;
+  if (talking() || Date.now() - lastSpeak < 400) {       // let the feedback finish first, then count down
+    autoTimer = setTimeout(startAuto, 250);
+    return;
+  }
   const label = $("next").textContent;
   let left = settings.auto;
   const tick = () => { $("next").textContent = `${label} (${left})`; };
