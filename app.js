@@ -8,7 +8,7 @@ const SIZES = [["Klein", 100], ["Middel", 250], ["Groot", 500]];
 const NS = "http://www.w3.org/2000/svg";
 
 const AUTO = [["Uit", 0], ["3 sec", 3], ["5 sec", 5], ["10 sec", 10]];   // wait after an answer, then go on by itself
-const defaults = () => ({ region: REGIONS[0].id, length: 10, marks: true, auto: 0, detail: true, set: "all", style: "name", retry: false, off: {}, custom: {} });
+const defaults = () => ({ region: REGIONS[0].id, length: 10, marks: true, auto: 0, detail: true, set: "all", style: "name", retry: false, limit: 0, off: {}, custom: {} });
 // Symbol per kind of Feature, following the legend on the Mondus Novus worksheet:
 // square = land/gebied, circle = stad/plaats, diamond = water, triangle = gebergte.
 // The map shows only the symbol, never the name.
@@ -21,7 +21,7 @@ const TYPES = {
   island:   { label: "eiland", color: "#159a9c" },
   volcano:  { label: "vulkaan", color: "#e0561e" },
 };
-const STYLES = [["Waar ligt …?", "name"], ["Omschrijving, tik op de kaart", "clue"], ["Meerkeuze", "choice"], ["Gemengd", "mix"]];
+const STYLES = [["Waar ligt …?", "name"], ["Omschrijving, tik op de kaart", "clue"], ["Meerkeuze", "choice"], ["Naam typen", "type"], ["Gemengd", "mix"]];
 let settings = load();
 
 function load() {
@@ -220,6 +220,7 @@ function renderSettings() {
   $("pickLists").hidden = toetsOn(r);
   seg($("setStyle"), STYLES, v => v === settings.style, v => { settings.style = v; save(); renderSettings(); });
   seg($("setRetry"), [["Uit", false], ["Aan", true]], v => v === settings.retry, v => { settings.retry = v; save(); renderSettings(); });
+  seg($("setLimit"), [["Uit", 0], ["20 sec", 20], ["30 sec", 30], ["60 sec", 60]], v => v === settings.limit, v => { settings.limit = v; save(); renderSettings(); });
   seg($("setAuto"), AUTO, v => v === settings.auto, v => { settings.auto = v; save(); renderSettings(); });
   seg($("setDetail"), [["Met rivieren en bergen", true], ["Alleen landen", false]], v => v === settings.detail, v => { settings.detail = v; save(); renderSettings(); });
   seg($("setMarks"), [["Met tekens op de kaart", true], ["Zonder tekens (tik op de plek)", false]], v => v === settings.marks, v => { settings.marks = v; save(); renderSettings(); });
@@ -313,7 +314,7 @@ function say(kind, title, detail = "") {
 let queue, idx, score, current, answered, roundSize, pool;
 // A description question needs a worksheet text; without one it falls back to "Waar ligt …?".
 function styleFor(p) {
-  const s = settings.style === "mix" ? shuffle(p.q ? ["name", "clue", "choice"] : ["name", "choice"])[0] : settings.style;
+  const s = settings.style === "mix" ? shuffle(p.q ? ["name", "clue", "choice", "type"] : ["name", "choice", "type"])[0] : settings.style;
   return s === "clue" && !p.q ? "name" : s;
 }
 const groupOf = p => p.kind === "country" ? "country" : (TYPES[p.type] || TYPES.area).label;
@@ -332,7 +333,7 @@ function startQuiz() {
   mode = "quiz";
   roundSize = Math.min(settings.length || pool.length, pool.length);
   queue = shuffle(pool.slice()).slice(0, roundSize).map(p => ({ ...p, style: styleFor(p) }));
-  idx = 0; score = 0;
+  idx = 0; score = 0; totalMs = 0;
   drawMap(r); drawRegions(pool); drawMarkers(r, pool); renderLegend(pool);
   $("quizPanel").hidden = false; $("editor").hidden = true;
   $("score").textContent = "";
@@ -350,7 +351,7 @@ function ask() {
   } else if (current.style === "clue") {
     $("question").textContent = current.q;
     say("plain", "Tik het goede antwoord aan op de kaart.");
-  } else {
+  } else {                                               // choice or type: answer with the name
     if (current.q) $("question").textContent = current.q;
     else {
       $("question").textContent = "Hoe heet de plek die blauw is aangegeven?";
@@ -358,8 +359,12 @@ function ask() {
       if (current.d && regionNode(current)) regionNode(current).classList.add("ask");
       if (current.at && (current.kind === "feature" || settings.marks)) ringMarker(r, current, "#4a7fd6");
     }
-    say("plain", "Kies het goede antwoord.");
-    choicesFor(current).forEach(p => {
+    if (current.style === "type") {
+      say("plain", "Typ de naam en druk op Controleer.");
+      $("typeBox").hidden = false; $("typeIn").value = ""; $("typeIn").disabled = false; $("typeGo").disabled = false;
+      setTimeout(() => $("typeIn").focus(), 50);
+    } else say("plain", "Kies het goede antwoord.");
+    if (current.style === "choice") choicesFor(current).forEach(p => {
       const b = h("button", { className: "choice ghost", textContent: cap(p.name) });
       b.onclick = () => pick(p, b);
       $("choices").appendChild(b);
@@ -367,7 +372,10 @@ function ask() {
   }
   $("next").hidden = true;
   $("skip").hidden = false;
+  startClock();
   resetHints(); $("hintBtn").disabled = false;
+  $("hintBtn").hidden = current.style === "choice";      // picking from four needs no hint
+  if (current.style !== "type") $("typeBox").hidden = true;
   tries = 0;
 }
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
@@ -384,6 +392,11 @@ function direction(r, at) {
   return ns || ew ? `in het ${ns}${ew}en van de kaart` : "in het midden van de kaart";
 }
 function hintsFor(r, p) {
+  if (p.style === "type") {                             // no map clues when typing: help with the word itself
+    const word = p.name.replace(/^(de|het) /, "");
+    return [`Het begint met de letter ${word[0].toUpperCase()}.`,
+      `Zo ziet het eruit: ${[...word].map((ch, i) => i === 0 ? ch.toUpperCase() : /[\s-]/.test(ch) ? ch === " " ? "  " : "-" : "_").join(" ")}`];
+  }
   const at = p.at || (r.countries.find(c => c.code === p.id) || {}).at;
   const kind = p.kind === "country" ? "een land" : settings.marks ? SHAPE_WORD[p.type] || "een teken" : "een plek";
   const first = `Zoek ${kind} ${direction(r, at)}.`;
@@ -408,7 +421,7 @@ $("hintBtn").onclick = () => {
   if (hintStep >= hs.length) return;
   $("hintText").hidden = false;
   $("hintText").append(h("div", { textContent: hs[hintStep] }));
-  if (hintStep === hs.length - 1) {                     // last step: a circle around the area, a bit off-centre
+  if (hintStep === hs.length - 1 && current.style !== "type") {                     // last step: a circle around the area, a bit off-centre
     const at = current.at || r.countries.find(c => c.code === current.id).at;
     const [x, y] = project(r, ...at), rad = r.width * .12, ang = Math.random() * 2 * Math.PI, off = rad * .45 * Math.random();
     overlay.appendChild(el("circle", { class: "ring hint-zone", cx: x + off * Math.cos(ang), cy: y + off * Math.sin(ang), r: rad }));
@@ -417,8 +430,78 @@ $("hintBtn").onclick = () => {
   $("hintBtn").textContent = hintStep < hs.length ? `💡 Nog een hint (${hintStep}/${hs.length})` : "💡 Geen hints meer";
   $("hintBtn").disabled = hintStep >= hs.length;
 };
+// Typed answers: ignore capitals, accents, "de/het", spaces and dashes; allow one small typo.
+const norm = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  .replace(/^(de|het|een)\s+/, "").replace(/\bst\.?\s/, "sint ").replace(/[^a-z0-9]/g, "");
+function editDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+function judgeTyped(text, p) {
+  const t = norm(text), names = [p.name, ...(p.alt || [])].map(norm);
+  if (names.includes(t)) return "exact";
+  const slack = t.length >= 9 ? 2 : t.length >= 4 ? 1 : 0;
+  return names.some(n => editDistance(t, n) <= slack) ? "close" : "wrong";
+}
+function submitTyped() {
+  if (answered || !current || current.style !== "type") return;
+  const text = $("typeIn").value.trim();
+  if (!text) { $("typeIn").focus(); return; }
+  const r = region(), verdict = judgeTyped(text, current), hit = verdict !== "wrong";
+  if (!hit && tryAgain("", () => {})) { say("hint", "Niet helemaal, probeer het nog een keer!", `Je typte “${text}”.`); $("typeIn").select(); return; }
+  $("typeIn").disabled = true; $("typeGo").disabled = true;
+  overlay.querySelectorAll(":scope > :not(.hint-zone)").forEach(n => n.remove());
+  document.querySelectorAll(".country.ask,.region-area.ask").forEach(n => n.classList.remove("ask"));
+  reveal(r, current, true);
+  if (verdict === "exact") say("good", "Goed zo!", `${current.plural ? "Het zijn" : "Het is"} ${current.name}.`);
+  else if (verdict === "close") say("good", "Goed zo! Bijna goed gespeld", `Je typte “${text}”. Je schrijft het zo: ${cap(current.name)}.`);
+  else say("bad", "Niet helemaal", `Je typte “${text}”. Het goede antwoord is ${cap(current.name)}.`);
+  finish(hit);
+}
+$("typeGo").onclick = submitTyped;
+$("typeIn").addEventListener("keydown", e => { if (e.key === "Enter") submitTyped(); });
+
 // Second chance (setting): the first wrong answer only shows what was tapped and lets her try again.
 let tries = 0;
+
+// ---------- timing ----------
+// Only time spent on open questions counts; reading the feedback in between does not.
+let totalMs = 0, qStart = 0, clockTimer = null;
+const fmt = ms => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+function startClock() {
+  qStart = Date.now();
+  clearInterval(clockTimer);
+  $("timebar").hidden = !settings.limit;
+  clockTimer = setInterval(tickClock, 200);
+  tickClock();
+}
+function tickClock() {
+  const running = Date.now() - qStart;
+  $("clock").textContent = `⏱ ${fmt(totalMs + running)}`;
+  if (!settings.limit) return;
+  const left = settings.limit * 1000 - running;
+  $("timebar").firstElementChild.style.width = `${Math.max(0, left / (settings.limit * 10))}%`;
+  $("timebar").classList.toggle("low", left < 5000);
+  if (left <= 0) timeUp();
+}
+function stopClock() {
+  if (clockTimer) { totalMs += Date.now() - qStart; clearInterval(clockTimer); clockTimer = null; }
+  $("clock").textContent = `⏱ ${fmt(totalMs)}`;
+}
+function timeUp() {
+  if (answered || !current) return;
+  const r = region();
+  overlay.querySelectorAll(":scope > :not(.hint-zone)").forEach(n => n.remove());
+  document.querySelectorAll(".country.ask,.region-area.ask").forEach(n => n.classList.remove("ask"));
+  [...$("choices").children].forEach(b => { b.disabled = true; if (b.textContent === cap(current.name)) b.classList.add("good"); });
+  $("typeIn").disabled = true; $("typeGo").disabled = true;
+  if (current.kind === "country" || settings.marks) reveal(r, current, true);
+  say("skip", "De tijd is om!", `${current.plural ? "Dit zijn" : "Dit is"} ${current.name}.`);
+  finish(false);
+}
 function tryAgain(name, showTap) {
   if (!settings.retry || tries > 0) return false;
   tries++;
@@ -444,6 +527,7 @@ function pick(p, button) {
   finish(hit);
 }
 function finish(hit) {
+  stopClock();
   answered = true;
   if (hit) score++;
   $("score").textContent = `Score: ${score}`;
@@ -497,14 +581,16 @@ function endRound() {
   $("question").textContent = `${score} van ${roundSize} goed`;
   $("feedback").className = "";
   $("feedback").innerHTML = `<div class="stars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</div>`;
+  $("feedback").append(h("div", { className: "endtime", textContent: `⏱ Je deed er ${fmt(totalMs)} over, gemiddeld ${Math.round(totalMs / 1000 / roundSize)} ${Math.round(totalMs / 1000 / roundSize) === 1 ? "seconde" : "seconden"} per vraag.` }));
+  $("timebar").hidden = true;
   $("score").textContent = "";
   $("next").textContent = "Opnieuw spelen"; $("next").dataset.act = "again"; $("next").hidden = false;
   $("skip").hidden = true;
-  $("hintBtn").hidden = true; $("hintText").hidden = true;
+  $("hintBtn").hidden = true; $("hintText").hidden = true; $("typeBox").hidden = true;
   current = null;
 }
 $("backbtn").onclick = () => {
-  clearAuto();
+  clearAuto(); clearInterval(clockTimer); clockTimer = null;
   if (mode === "editor") return $("cCancel").onclick();
   renderHome(); show("home");
 };
@@ -519,7 +605,7 @@ svg.addEventListener("pointerup", evt => {
     $("editorHint").textContent = "Klopt de plek? Tik opnieuw om te verplaatsen.";
     return;
   }
-  if (answered || !current || current.style === "choice") return;
+  if (answered || !current || (current.style === "choice" || current.style === "type")) return;
 
   // Markers sit on top of the land, so look through them to the country underneath.
   const target = document.elementsFromPoint(evt.clientX, evt.clientY).find(n => n.dataset && n.dataset.id && n.closest("#land")) || null;

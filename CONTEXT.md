@@ -49,8 +49,16 @@ The fixed set of Places from the child's school worksheet (Mondus Novus 2, 28 Pl
 _Avoid_: Test set, exam
 
 **Question style**:
-How a Question is put: by name ("Waar ligt Peru?"), by description from the worksheet text (then touch the map), or as multiple choice (pick the name from four).
+How a Question is put: by name ("Waar ligt Peru?"), by description from the worksheet text (then touch the map), as multiple choice (pick the name from four), or by typing the name.
 _Avoid_: Question type, mode
+
+**Hint**:
+Extra help for the current Question, given one step at a time on request; using one does not cost the point.
+_Avoid_: Tip, clue
+
+**Second chance**:
+A setting under which the first wrong answer to a Question is not final; the answer is only revealed after a second miss.
+_Avoid_: Retry, extra life
 
 **Question**:
 One prompt asking the child to find a Place.

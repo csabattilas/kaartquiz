@@ -39,6 +39,8 @@
   <h2>Aantal vragen per ronde</h2>
   <div class="seg" id="setLength"></div>
   <div class="row"><label for="lenInput">Of kies zelf een aantal:</label> <input id="lenInput" type="number" inputmode="numeric" min="1" max="200" style="width:5em;font:inherit;padding:8px;border-radius:10px;border:2px solid rgba(120,140,160,.4);background:var(--card);color:var(--ink)"></div>
+  <h2>Tijd per vraag</h2>
+  <div class="seg" id="setLimit"></div>
   <h2>Tweede kans bij een fout antwoord</h2>
   <div class="seg" id="setRetry"></div>
   <h2>Automatisch verder na een antwoord</h2>
@@ -64,9 +66,14 @@
   <div id="side">
     <button id="backbtn" class="ghost">‹ Stoppen</button>
     <div id="quizPanel">
-      <div id="progress"></div>
+      <div id="topline"><div id="progress"></div><div id="clock"></div></div>
       <div id="question"></div>
+      <div id="timebar" hidden><div></div></div>
       <div id="choices"></div>
+      <div id="typeBox" hidden>
+        <input id="typeIn" type="text" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" placeholder="Typ hier de naam">
+        <button id="typeGo">Controleer</button>
+      </div>
       <div id="feedback"></div>
       <div id="score"></div>
       <button id="next" hidden>Volgende</button>

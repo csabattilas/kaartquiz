@@ -117,7 +117,7 @@ svg#map { height: 100%; max-width: 100%; touch-action: manipulation; }
 /* quiz panel spacing: each block gets room to breathe */
 #quizPanel { display: flex; flex-direction: column; gap: 18px; }
 #quizPanel > [hidden] { display: none !important; }
-#progress { font-size: 1rem; letter-spacing: .02em; margin-bottom: -10px; }
+#progress { font-size: 1rem; letter-spacing: .02em; }
 #question { line-height: 1.25; }
 #feedback:empty { display: none; }
 #feedback:not(.fb) { color: var(--muted); min-height: 0; }
@@ -129,7 +129,7 @@ svg#map { height: 100%; max-width: 100%; touch-action: manipulation; }
 #legend { margin-top: 6px; padding-top: 16px; border-top: 1px solid rgba(120,140,160,.25); gap: 10px 18px; }
 @media (max-width: 700px) {
   #quizPanel { gap: 10px; }
-  #progress { margin-bottom: -6px; }
+
   #legend { padding-top: 10px; gap: 6px 14px; }
 }
 
@@ -150,3 +150,19 @@ svg#map { height: 100%; max-width: 100%; touch-action: manipulation; }
 .btns { margin: 0; flex-wrap: wrap; gap: 10px; }
 .btns [hidden] { display: none; }
 .hint-zone { fill: rgba(242, 194, 48, .16); stroke: #f2c230; stroke-width: 3; stroke-dasharray: 10 6; pointer-events: none; }
+
+#typeBox { display: flex; gap: 10px; }
+#typeBox[hidden] { display: none; }
+#typeIn { flex: 1; min-width: 0; font: inherit; font-size: 1.3rem; padding: 12px 14px; border-radius: 14px;
+  border: 2px solid rgba(120,140,160,.45); background: var(--card); color: var(--ink); -webkit-user-select: text; user-select: text; }
+#typeIn:focus { outline: none; border-color: var(--accent); }
+#typeIn:disabled { opacity: .7; }
+
+#topline { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: -10px; color: var(--muted); }
+#clock { font-variant-numeric: tabular-nums; font-weight: 700; }
+#timebar { height: 10px; border-radius: 6px; background: rgba(120,140,160,.25); overflow: hidden; }
+#timebar[hidden] { display: none; }
+#timebar div { height: 100%; width: 100%; background: var(--accent); border-radius: 6px; transition: width .2s linear; }
+#timebar.low div { background: #d64560; }
+.endtime { font-size: 1.1rem; margin-top: 8px; }
+@media (max-width: 700px) { #topline { margin-bottom: -6px; } }
