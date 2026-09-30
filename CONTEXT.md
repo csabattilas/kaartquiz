@@ -21,7 +21,7 @@ A drawn area on the map that is never asked about (French Guiana, Falkland Islan
 _Avoid_: Dependency, colony
 
 **Marker**:
-The unlabeled symbol drawn on the map at a Feature's Anchor point; its shape shows the kind of Feature (triangle for mountains, diamond for rivers, circle for water and for cities or sights (told apart by colour), square for areas), and the child touches it to answer.
+The unlabeled symbol drawn on the map at a Feature's Anchor point; its shape shows the kind of Feature (following the worksheet legend: square for countries and areas, circle for cities, diamond for water, triangle for mountains), and the child touches it to answer.
 _Avoid_: Pin, icon, label
 
 **Anchor point**:
