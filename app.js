@@ -7,7 +7,7 @@ const LENGTHS = [5, 10, 20, 0];            // 0 = alle geselecteerde plekken
 const SIZES = [["Klein", 100], ["Middel", 250], ["Groot", 500]];
 const NS = "http://www.w3.org/2000/svg";
 
-const AUTO = [["Uit", 0], ["3 sec", 3], ["5 sec", 5], ["10 sec", 10]];   // wait after an answer, then go on by itself
+const AUTO = [["Uit", 0], ["1 sec", 1], ["3 sec", 3], ["5 sec", 5], ["10 sec", 10]];   // wait after an answer, then go on by itself
 const defaults = () => ({ region: REGIONS[0].id, length: 10, marks: true, auto: 0, detail: true, set: "all", style: "name", retry: false, limit: 0, off: {}, custom: {} });
 // Symbol per kind of Feature, following the legend on the Mondus Novus worksheet:
 // square = land/gebied, circle = stad/plaats, diamond = water, triangle = gebergte.
