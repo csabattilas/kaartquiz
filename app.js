@@ -770,7 +770,11 @@ show("home");
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   const offer = w => {
     $("updateBar").hidden = false;
-    $("updateBtn").onclick = () => { $("updateBtn").disabled = true; w.postMessage("update"); };
+    $("updateBtn").onclick = () => {
+      $("updateBtn").disabled = true;
+      if (w.state === "activated") location.reload();   // already took over: just load the new files
+      else w.postMessage("update");                     // reloads on controllerchange below
+    };
   };
   navigator.serviceWorker.register("sw.js").then(reg => {
     if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);

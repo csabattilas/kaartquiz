@@ -1,12 +1,15 @@
 // Cache-first so the quiz works offline once it has been opened online.
 // Bump CACHE whenever any app file changes: that is what makes installed apps update.
-const CACHE = "kaartquiz-v34";
+const CACHE = "kaartquiz-v35";
 const FILES = ["./", "index.html", "style.css", "app.js", "regions/south-america.js", "regions/asia.js",
   "manifest.webmanifest", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png"];
 
 // Fetch past the browser's HTTP cache, so a new version never stores old files.
+// A new version takes over as soon as it is downloaded (no waiting until every window is closed),
+// so the next refresh or reopen shows it. The page itself never reloads in the middle of a quiz.
 self.addEventListener("install", e => e.waitUntil(
-  caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: "reload" }))))));
+  caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: "reload" }))))
+    .then(() => self.skipWaiting())));
 
 self.addEventListener("activate", e => e.waitUntil(
   caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))
