@@ -766,6 +766,26 @@ svg.addEventListener("pointerup", evt => {
 // ---------- boot ----------
 renderHome();
 show("home");
+// Updates: a new version downloads in the background; the home screen then offers to load it.
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  navigator.serviceWorker.register("sw.js").catch(() => {});
+  const offer = w => {
+    $("updateBar").hidden = false;
+    $("updateBtn").onclick = () => { $("updateBtn").disabled = true; w.postMessage("update"); };
+  };
+  navigator.serviceWorker.register("sw.js").then(reg => {
+    if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
+    reg.addEventListener("updatefound", () => {
+      const w = reg.installing;
+      w.addEventListener("statechange", () => {
+        if (w.state === "installed" && navigator.serviceWorker.controller) offer(w);
+      });
+    });
+    // look again whenever the app comes back to the front
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloading || !$("updateBtn").disabled) return;  // only reload when she asked for it
+    reloading = true; location.reload();
+  });
 }

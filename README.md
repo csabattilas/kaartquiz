@@ -24,7 +24,7 @@ only runs over http/https.)
 | `tools/build_regions.py` | Regenerates `regions/*.js` |
 | `app.js` | Game logic, settings screen, marker shapes (`TYPES`) |
 | `style.css`, `index.html` | Look and layout |
-| `sw.js` | Offline cache. **Bump `CACHE` whenever any app file changes** so devices pick up the update |
+| `sw.js` | Offline cache and updates. **Bump `CACHE` whenever any app file changes**: installed apps then download the new version and show "Nieuwe versie — Bijwerken" on the home screen |
 
 ## Changing the Places
 

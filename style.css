@@ -192,3 +192,8 @@ svg#map { height: 100%; max-width: 100%; touch-action: manipulation; }
 .pause-card p { margin: 0; color: var(--muted); font-size: 1.1rem; }
 .pause-icon { font-size: 4rem; }
 #resumeBtn { font-size: 1.5rem; padding: 18px 48px; border-radius: 22px; }
+
+#updateBar { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 18px; border-radius: 18px; font-weight: 700;
+  background: color-mix(in srgb, #f2c230 25%, var(--card)); border: 2px solid #f2c230; animation: pop .28s ease-out; }
+#updateBar[hidden] { display: none; }
+#updateBtn { padding: 8px 16px; font-size: 1rem; }
