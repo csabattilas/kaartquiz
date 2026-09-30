@@ -58,7 +58,7 @@ function poolOf(r) {
   const all = placesOf(r);
   return r.toets.places.map(t => {
     const p = all.find(x => x.key === t.ref);
-    return { ...p, q: t.q };
+    return { ...p, q: t.q, ...(t.at ? { at: t.at } : {}) };   // the worksheet may place a square differently
   });
 }
 

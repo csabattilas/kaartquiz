@@ -149,6 +149,22 @@ def build(cfg):
             taken.append(to_xy(at))
     countries = [{**c, 'at': placed[c['code']]} for c in cfg['countries']]
 
+    # The worksheet list shows fewer markers, so its squares can sit closer to the middle.
+    toets = cfg.get('toets')
+    if toets:
+        refs = {t['ref'] for t in toets['places']}
+        feats = {f['id']: f for f in cfg['features']}
+        feat_at = {t['ref']: t.get('at') or feats[t['ref'][2:]]['at'] for t in toets['places'] if t['ref'].startswith('f:')}
+        taken_t = [to_xy(a) for a in feat_at.values()]
+        at_t = {}
+        for c in order:
+            if 'c:' + c['code'] in refs:
+                own = next(t.get('at') for t in toets['places'] if t['ref'] == 'c:' + c['code'])
+                at_t[c['code']] = own or c.get('at') or place_square(geoms[c['code']], taken_t, to_xy, gap)
+                taken_t.append(to_xy(at_t[c['code']]))
+        toets = {**toets, 'places': [{**t, 'at': at_t[t['ref'][2:]]} if t['ref'].startswith('c:') else t for t in toets['places']]}
+        # a toets "at" on a Feature moves only its marker; its region shape still counts as the answer
+
     # Hint data. Neighbours share border vertices in Natural Earth, so compare rounded vertices.
     verts = {code: {(round(x, 2), round(y, 2)) for p in polygons(g) for x, y in p[0]} for code, g in geoms.items()}
     for c in countries:
@@ -210,7 +226,7 @@ def build(cfg):
         'lon0': b['lonMin'], 'lat0': b['latMax'],
         'countries': countries, 'features': [{**with_shape(f), **country_of(f['at'])} for f in cfg['features']], 'shapes': shapes,
         'rivers': river_paths, 'lakes': lake_paths, 'ranges': range_paths,
-        'toets': cfg.get('toets'),
+        'toets': toets,
         'compass': cfg.get('compass'),
     }
 
