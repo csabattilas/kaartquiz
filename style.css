@@ -84,7 +84,7 @@ svg#map { height: 100%; max-width: 100%; touch-action: manipulation; }
 #editor label { display: block; font-weight: 700; margin: 6px 0; }
 #editor input[type=text] { width: 100%; font: inherit; font-size: 1.15rem; padding: 12px; border-radius: 12px; border: 2px solid rgba(120,140,160,.4); background: var(--card); color: var(--ink); }
 #editor .row { flex-wrap: wrap; }
-#backbtn { align-self: flex-start; padding: 8px 14px; font-size: 1rem; }
+#backbtn, #pauseBtn { padding: 8px 14px; font-size: 1rem; }
 
 @media (max-width: 700px) {
   #game { flex-direction: column; }
@@ -181,3 +181,14 @@ svg#map { height: 100%; max-width: 100%; touch-action: manipulation; }
 .learn-block.sheet { border: 2px solid #2e9e5b; }
 .learn-block p { margin: 6px 0 0; }
 .learn-block ul { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 6px; }
+
+.topbtns { margin: 0; gap: 10px; }
+.topbtns [hidden] { display: none; }
+#pauseScreen { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 20px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+#pauseScreen[hidden] { display: none; }
+.pause-card { text-align: center; display: grid; gap: 14px; justify-items: center; animation: pop .28s ease-out; }
+.pause-card h2 { margin: 0; font-size: 2.4rem; }
+.pause-card p { margin: 0; color: var(--muted); font-size: 1.1rem; }
+.pause-icon { font-size: 4rem; }
+#resumeBtn { font-size: 1.5rem; padding: 18px 48px; border-radius: 22px; }

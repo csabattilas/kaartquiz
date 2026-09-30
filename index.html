@@ -64,7 +64,7 @@
 
 <section id="game" class="screen" hidden>
   <div id="side">
-    <button id="backbtn" class="ghost">‹ Stoppen</button>
+    <div class="row topbtns"><button id="backbtn" class="ghost">‹ Stoppen</button><button id="pauseBtn" class="ghost">⏸ Pauze</button></div>
     <div id="quizPanel">
       <div id="topline"><div id="progress"></div><div id="clock"></div></div>
       <div id="question"></div>
@@ -111,6 +111,15 @@
     </svg>
   </div>
 </section>
+
+<div id="pauseScreen" hidden>
+  <div class="pause-card">
+    <div class="pause-icon">⏸</div>
+    <h2>Pauze</h2>
+    <p id="pauseInfo"></p>
+    <button id="resumeBtn">▶ Verder</button>
+  </div>
+</div>
 
 <script src="regions/south-america.js"></script>
 <script src="regions/asia.js"></script>

@@ -272,7 +272,7 @@ document.querySelectorAll("[data-bulk]").forEach(b => b.onclick = () => {
 // ---------- custom place editor ----------
 let mode = "quiz", draft = null;
 $("addCustom").onclick = () => {
-  mode = "editor"; draft = { at: null, r: 250, type: "sight" };
+  mode = "editor"; draft = { at: null, r: 250, type: "sight" }; $("pauseBtn").hidden = true;
   drawMap(region());
   $("quizPanel").hidden = true; $("editor").hidden = false; $("learnPanel").hidden = true;
   $("cName").value = ""; renderTypes(); renderSizes(); updateSave();
@@ -309,7 +309,7 @@ function startLearn() {
   const r = region();
   pool = poolOf(r);
   if (!pool.length) return;
-  mode = "learn"; current = null;
+  mode = "learn"; current = null; $("pauseBtn").hidden = true;
   drawMap(r); drawRegions(pool); drawMarkers(r, pool); renderLegend(pool);
   $("quizPanel").hidden = true; $("editor").hidden = true; $("learnPanel").hidden = false;
   $("learnTitle").textContent = toetsOn(r) ? `Leren: ${r.toets.name}` : `Leren: ${r.name}`;
@@ -397,7 +397,8 @@ function startQuiz() {
   idx = 0; score = 0; totalMs = 0;
   drawMap(r); drawRegions(pool); drawMarkers(r, pool); renderLegend(pool);
   $("quizPanel").hidden = false; $("editor").hidden = true; $("learnPanel").hidden = true;
-  $("quizPanel").append(LEGEND);                   // the legend may have moved into the learning panel
+  $("quizPanel").append(LEGEND);
+  $("pauseBtn").hidden = false;                   // the legend may have moved into the learning panel
   $("score").textContent = "";
   show("game");
   ask();
@@ -509,7 +510,7 @@ function judgeTyped(text, p) {
   return names.some(n => editDistance(t, n) <= slack) ? "close" : "wrong";
 }
 function submitTyped() {
-  if (answered || !current || current.style !== "type") return;
+  if (paused || answered || !current || current.style !== "type") return;
   const text = $("typeIn").value.trim();
   if (!text) { $("typeIn").focus(); return; }
   const r = region(), verdict = judgeTyped(text, current), hit = verdict !== "wrong";
@@ -550,9 +551,35 @@ function tickClock() {
   if (left <= 0) timeUp();
 }
 function stopClock() {
-  if (clockTimer) { totalMs += Date.now() - qStart; clearInterval(clockTimer); clockTimer = null; }
+  if (clockTimer) { totalMs += (clockTimer === "paused" ? pausedAt : Date.now()) - qStart; clearInterval(clockTimer); clockTimer = null; }
   $("clock").textContent = `⏱ ${fmt(totalMs)}`;
 }
+// ---------- pause ----------
+// Stops the clock, the time limit and auto-advance, and hides the map so the pause cannot be used to look.
+let paused = false, pausedAt = 0, autoLeft = 0;
+function pauseQuiz() {
+  if (paused || mode !== "quiz" || $("game").hidden || !current) return;
+  paused = true; pausedAt = Date.now();
+  if (clockTimer) { clearInterval(clockTimer); clockTimer = "paused"; }
+  const wasAuto = !!autoTimer; clearAuto(); autoLeft = wasAuto ? settings.auto : 0;
+  $("next").textContent = $("next").textContent.replace(/ \(\d+\)$/, "");   // drop the countdown number
+  $("pauseInfo").textContent = current ? `Vraag ${idx + 1} van ${roundSize} · ⏱ ${fmt(totalMs + (clockTimer ? pausedAt - qStart : 0))}` : "";
+  $("pauseScreen").hidden = false;
+}
+function resumeQuiz() {
+  if (!paused) return;
+  paused = false;
+  $("pauseScreen").hidden = true;
+  if (clockTimer === "paused") {                        // the question was still open: carry on counting from where it stopped
+    qStart += Date.now() - pausedAt;
+    clockTimer = setInterval(tickClock, 200); tickClock();
+  }
+  if (autoLeft && answered) startAuto();
+}
+$("pauseBtn").onclick = pauseQuiz;
+$("resumeBtn").onclick = resumeQuiz;
+document.addEventListener("visibilitychange", () => { if (document.hidden) pauseQuiz(); });
+
 function timeUp() {
   if (answered || !current) return;
   const r = region();
@@ -649,10 +676,11 @@ function endRound() {
   $("next").textContent = "Opnieuw spelen"; $("next").dataset.act = "again"; $("next").hidden = false;
   $("skip").hidden = true;
   $("hintBtn").hidden = true; $("hintText").hidden = true; $("typeBox").hidden = true;
+  $("pauseBtn").hidden = true;
   current = null;
 }
 $("backbtn").onclick = () => {
-  clearAuto(); clearInterval(clockTimer); clockTimer = null;
+  clearAuto(); clearInterval(clockTimer); clockTimer = null; paused = false; $("pauseScreen").hidden = true;
   if (mode === "editor") return $("cCancel").onclick();
   renderHome(); show("home");
 };
