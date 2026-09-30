@@ -1,6 +1,6 @@
 // Cache-first so the quiz works offline once it has been opened online.
 // Bump CACHE whenever any app file changes: that is what makes installed apps update.
-const CACHE = "kaartquiz-v41";
+const CACHE = "kaartquiz-v42";
 const AUDIO = "kaartquiz-audio";          // recordings keep their own cache, so an update only fetches new ones
 const FILES = ["./", "index.html", "style.css", "app.js", "regions/south-america.js", "regions/asia.js",
   "manifest.webmanifest", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png"];

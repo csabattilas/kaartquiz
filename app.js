@@ -398,22 +398,29 @@ function spoken(text) {
 // Chrome on Android drops or delays an utterance started right after cancel(), so: cancel, wait a
 // moment, then speak and nudge with resume(). A newer speak() call replaces a pending one.
 let speakToken = 0, lastSpeak = 0;
+// A list of sentences is said one after the other (recordings are one file per sentence).
 function speak(text) {
-  if (!settings.sound || !text) return;
+  if (!settings.sound || !text || !text.length) return;
+  const parts = [].concat(text).filter(Boolean);
   if (clips) {
-    speakToken++; lastSpeak = Date.now();
+    const token = ++speakToken; lastSpeak = Date.now();
     player.pause();
-    const file = clips[spoken(text)];
-    if (!file) return;
-    player.src = "audio/" + file;
-    player.play().catch(() => {});
+    const files = parts.map(t => clips[spoken(t)]).filter(Boolean);
+    const next = () => {
+      if (token !== speakToken || !files.length) { player.onended = null; return; }
+      player.src = "audio/" + files.shift();
+      lastSpeak = Date.now();
+      player.play().catch(() => {});
+    };
+    player.onended = next;
+    next();
     return;
   }
   if (!synth) return;
   const token = ++speakToken; lastSpeak = Date.now();
   const go = () => {
     if (token !== speakToken) return;
-    const u = new SpeechSynthesisUtterance(spoken(text));
+    const u = new SpeechSynthesisUtterance(spoken(parts.join(" ")));
     u.lang = "nl-NL"; u.rate = 0.9;
     if (dutchVoice) u.voice = dutchVoice;
     synth.speak(u);
@@ -422,8 +429,8 @@ function speak(text) {
   if (synth.speaking || synth.pending) { synth.cancel(); setTimeout(go, 150); }
   else go();
 }
-const talking = () => settings.sound && ((!player.paused && !player.ended) || !!(synth && (synth.speaking || synth.pending)));
-const hush = () => { speakToken++; player.pause(); if (synth) synth.cancel(); };
+const talking = () => settings.sound && ((!player.paused && !player.ended) || !!player.onended || !!(synth && (synth.speaking || synth.pending)));
+const hush = () => { speakToken++; player.onended = null; player.pause(); if (synth) synth.cancel(); };
 function effect(kind) {
   if (!settings.sound) return;
   try {
@@ -465,20 +472,28 @@ let learnSpeech = "";
 // ---------- quiz ----------
 // Result card: colour and icon tell right / wrong / skipped / try-again at a glance.
 const ICONS = { good: "✓", bad: "✗", skip: "➜", hint: "!" };
-function say(kind, title, detail = "") {
+function say(kind, title, detail = "", tapped = "") {
   const f = $("feedback");
   f.className = "fb " + kind;
   f.replaceChildren();
   if (kind === "plain") { f.className = ""; f.textContent = title; return; }
   if (kind === "good" || kind === "bad") effect(kind);
-  speak(voiceFor(kind, title, detail));
+  let voice = voiceFor(kind, title, detail, current, tapped);
+  // not recorded yet (e.g. a new place): fall back to the sentence without what she tapped
+  if (clips && [].concat(voice).some(t => !clips[spoken(t)])) voice = voiceFor(kind, title, detail, current);
+  speak(voice);
   const body = h("div", {}, h("b", { textContent: title }));
   if (detail) body.append(h("span", { textContent: detail }));
   f.append(h("i", { className: "fb-icon", textContent: ICONS[kind] }), body);
 }
-// What is said for a result card. Kept to fixed sentences per place so they can be recorded;
-// what she tapped or typed stays on screen only.
-function voiceFor(kind, title, detail, p = current) {
+// What is said for a result card. Kept to fixed sentences per place so they can be recorded, so a
+// wrong tap is said as two sentences: what she tapped, then the right answer. Typed text is not said.
+const tappedVoice = name => `Niet helemaal. Je tikte op ${name}.`;
+const rightVoice = p => `Het goede antwoord is ${p.name}.`;
+const AGAIN = "Probeer het nog een keer!";
+function voiceFor(kind, title, detail, p = current, tapped = "") {
+  if (tapped && /probeer het nog een keer/.test(title)) return [tappedVoice(tapped), AGAIN];
+  if (p && kind === "bad" && tapped) return [tappedVoice(tapped), rightVoice(p)];
   const is = p && (p.plural ? "Dat zijn" : "Dat is"), dit = p && (p.plural ? "Dit zijn" : "Dit is");
   if (p && kind === "good") return /Bijna/.test(title) ? `Goed zo! Bijna goed gespeld. Je schrijft het zo: ${cap(p.name)}.` : `Goed zo! ${is} ${p.name}.`;
   if (p && kind === "bad") return `Niet helemaal. Het goede antwoord is ${p.name}.`;
@@ -498,7 +513,7 @@ const VOICE_REGIONS = ["south-america"];
 window.voiceLines = () => {
   const out = new Set(), add = t => t && out.add(spoken(t));
   const keepMarks = settings.marks;
-  [LEARN_START, LEARN_SEA, LEARN_OTHER, ASK_BLUE, "Niet helemaal, probeer het nog een keer!",
+  [LEARN_START, LEARN_SEA, LEARN_OTHER, ASK_BLUE, "Niet helemaal, probeer het nog een keer!", AGAIN,
     voiceFor("hint", "Dat is zee", "Probeer opnieuw!", null), voiceFor("hint", "Dat is een ander gebied", "Probeer opnieuw!", null),
     voiceFor("hint", "Tik op een teken", "Zoek het juiste teken op de kaart.", null)].forEach(add);
   for (let n = 0; n <= 60; n++) add(endVoice(n));
@@ -508,6 +523,7 @@ window.voiceLines = () => {
       const q = p.q || qs.get(p.key);
       add(questionVoice(p)); add(q);
       ["good", "bad", "skip"].forEach(k => add(voiceFor(k, "", "", p)));
+      add(tappedVoice(p.name)); add(rightVoice(p));
       add(voiceFor("good", "Bijna", "", p)); add(voiceFor("skip", "De tijd is om!", "", p));
       [true, false].forEach(m => { settings.marks = m; hintsFor(r, { ...p, style: "name" }).forEach(add); });
       hintsFor(r, { ...p, style: "type" }).forEach(add);
@@ -754,13 +770,13 @@ function tryAgain(name, showTap) {
   overlay.querySelectorAll(":scope > :not(.hint-zone)").forEach(n => n.remove());
   document.querySelectorAll(".country.wrong,.region-area.wrong").forEach(n => n.classList.remove("wrong"));
   showTap();
-  say("hint", "Niet helemaal, probeer het nog een keer!", name ? `Je tikte op ${name}.` : "");
+  say("hint", "Niet helemaal, probeer het nog een keer!", name ? `Je tikte op ${name}.` : "", name);
   return true;
 }
 function pick(p, button) {
   if (answered || !current) return;
   const r = region(), hit = p.key === current.key;
-  if (!hit && tryAgain("", () => { button.classList.add("bad"); button.disabled = true; })) return;
+  if (!hit && tryAgain(p.name, () => { button.classList.add("bad"); button.disabled = true; })) return;
   overlay.innerHTML = "";                                  // drop the blue "which place?" ring, keep the buttons
   document.querySelectorAll(".country.ask,.region-area.ask").forEach(n => n.classList.remove("ask"));
   [...$("choices").children].forEach(b => { b.disabled = true; if (b.textContent === cap(current.name)) b.classList.add("good"); });
@@ -768,7 +784,7 @@ function pick(p, button) {
   if (hit) say("good", "Goed zo!", `${current.plural ? "Het zijn" : "Het is"} ${current.name}.`);
   else {
     button.classList.add("bad"); reveal(r, p, false);
-    say("bad", "Niet helemaal", `Het goede antwoord is ${current.name}. Die staat nu groen op de kaart.`);
+    say("bad", "Niet helemaal", `Je tikte op ${p.name}. Het goede antwoord is ${current.name}. Die staat nu groen op de kaart.`, p.name);
   }
   finish(hit);
 }
@@ -872,7 +888,7 @@ svg.addEventListener("pointerup", evt => {
     if (onMarker && onMarker.kind === "feature" && !(target && target.dataset.id === current.id)) {
       if (tryAgain(onMarker.name, () => { reveal(r, onMarker, false); crossMark(r, ...project(r, ...onMarker.at)); })) return;
       reveal(r, current, true); reveal(r, onMarker, false); crossMark(r, ...project(r, ...onMarker.at));
-      say("bad", "Niet helemaal", `Je tikte op ${onMarker.name}. Het groene land is ${current.name}.`);
+      say("bad", "Niet helemaal", `Je tikte op ${onMarker.name}. Het groene land is ${current.name}.`, onMarker.name);
       return finish(false);
     }
     if (!target) { say("hint", "Dat is zee", "Probeer opnieuw!"); return; }
@@ -886,7 +902,7 @@ svg.addEventListener("pointerup", evt => {
       const sq = pool.find(p => p.key === "c:" + target.dataset.id);
       if (sq && sq.at && settings.marks) ringMarker(r, sq, "#e0566b");
       const named = r.countries.find(c => c.code === target.dataset.id);
-      say("bad", "Niet helemaal", `${named ? "Je tikte op " + named.name + ". " : ""}Het groene land is ${current.name}.`);
+      say("bad", "Niet helemaal", `${named ? "Je tikte op " + named.name + ". " : ""}Het groene land is ${current.name}.`, named && named.name);
     }
     finish(hit);
   } else if (settings.marks) {
@@ -907,7 +923,7 @@ svg.addEventListener("pointerup", evt => {
       const other = tapped && pool.find(p => p.key === tapped);
       if (other) reveal(r, other, false);
       crossMark(r, ...(other ? project(r, ...other.at) : [pt.x, pt.y]));
-      say("bad", "Niet helemaal", `${other ? "Je tikte op " + other.name + ". " : ""}${current.d ? "Het groene gebied" : "Het groene teken"} is ${current.name}.`);
+      say("bad", "Niet helemaal", `${other ? "Je tikte op " + other.name + ". " : ""}${current.d ? "Het groene gebied" : "Het groene teken"} is ${current.name}.`, other && other.name);
     }
     finish(hit);
   } else {
