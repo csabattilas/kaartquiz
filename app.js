@@ -8,7 +8,7 @@ const SIZES = [["Klein", 100], ["Middel", 250], ["Groot", 500]];
 const NS = "http://www.w3.org/2000/svg";
 
 const AUTO = [["Uit", 0], ["1 sec", 1], ["3 sec", 3], ["5 sec", 5], ["10 sec", 10]];   // wait after an answer, then go on by itself
-const defaults = () => ({ region: REGIONS[0].id, length: 10, marks: true, auto: 0, detail: true, set: "all", style: "name", retry: false, limit: 0, off: {}, custom: {} });
+const defaults = () => ({ region: REGIONS[0].id, length: 10, marks: true, auto: 0, detail: true, set: "all", style: "name", retry: false, limit: 0, sound: false, off: {}, custom: {} });
 // Symbol per kind of Feature, following the legend on the Mondus Novus worksheet:
 // square = land/gebied, circle = stad/plaats, diamond = water, triangle = gebergte.
 // The map shows only the symbol, never the name.
@@ -36,7 +36,7 @@ const region = () => REGIONS.find(r => r.id === settings.region) || REGIONS[0];
 function placesOf(r) {
   const customs = (settings.custom[r.id] || []).map(c => ({ type: "sight", ...c, key: "f:" + c.id, kind: "feature", custom: true }));
   return [
-    ...r.countries.map(c => ({ key: "c:" + c.code, kind: "country", id: c.code, name: c.name, small: !!c.small, type: "area", at: c.at })),
+    ...r.countries.map(c => ({ key: "c:" + c.code, kind: "country", id: c.code, name: c.name, small: !!c.small, type: "area", at: c.at, info: c.info })),
     ...r.features.map(f => ({ key: "f:" + f.id, kind: "feature", ...f })),
     ...customs,
   ];
@@ -334,8 +334,12 @@ function learnAbout(r, p) {
   if (facts.length) {
     const ul = h("ul");
     facts.forEach(f => ul.append(h("li", { textContent: f })));
-    body.append(h("div", { className: "learn-block" }, h("b", { textContent: "💡 Wist je dat?" }), ul));
+    const more = h("button", { className: "ghost mini", textContent: "🔊", ariaLabel: "Lees voor" });
+    more.onclick = () => { const was = settings.sound; settings.sound = true; speak(facts.join(" ")); settings.sound = was; };
+    body.append(h("div", { className: "learn-block" }, h("div", { className: "learn-head" }, h("b", { textContent: "💡 Wist je dat?" }), more), ul));
   }
+  learnSpeech = `${cap(p.name)}. ${fact || ""}`;
+  speak(learnSpeech);
   body.append(LEGEND);
 }
 function learnTap(evt, pt) {
@@ -353,12 +357,77 @@ function learnTap(evt, pt) {
       || (land.classList.contains("country") && placesOf(r).find(x => x.key === "c:" + land.dataset.id));
     if (!p) {
       clearMarks();
-      $("learnBody").replaceChildren(h("p", { className: "muted", textContent: land ? "Dit land hoort niet bij deze lijst." : "Dat is zee. Tik op een teken, een land of een gebied." }), LEGEND);
+      const msg = land ? "Dit land hoort niet bij deze lijst." : "Dat is zee. Tik op een teken, een land of een gebied.";
+      $("learnBody").replaceChildren(h("p", { className: "muted", textContent: msg }), LEGEND);
+      speak(msg);
       return;
     }
   }
   learnAbout(r, p);
 }
+
+// ---------- sound ----------
+// Read-aloud with the tablet's own Dutch voice (no internet or account needed), plus a short
+// "ding" for right and a soft low tone for wrong. One toggle, next to the question, controls both.
+const synth = window.speechSynthesis;
+let dutchVoice = null, voiceWarned = false, audioCtx = null;
+function pickVoice() {
+  const vs = synth ? synth.getVoices() : [];
+  dutchVoice = vs.find(v => /^nl[-_]NL/i.test(v.lang)) || vs.find(v => /^nl/i.test(v.lang)) || null;
+  return vs.length;
+}
+if (synth) { pickVoice(); synth.addEventListener && synth.addEventListener("voiceschanged", pickVoice); }
+// Spoken form of a text: no emoji, and the "L _ _ _" letter hint said as a letter count.
+function spoken(text) {
+  if (/_/.test(text)) return `Het woord heeft ${(text.match(/_/g) || []).length + 1} letters.`;
+  return text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "").replace(/[“”]/g, "").trim();
+}
+function speak(text) {
+  if (!settings.sound || !synth || !text) return;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(spoken(text));
+  u.lang = "nl-NL"; u.rate = 0.9;
+  if (dutchVoice) u.voice = dutchVoice;
+  synth.speak(u);
+}
+const hush = () => { if (synth) synth.cancel(); };
+function effect(kind) {
+  if (!settings.sound) return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const notes = kind === "good" ? [[880, 0], [1320, .11]] : [[196, 0]];
+    notes.forEach(([f, t]) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain(), at = audioCtx.currentTime + t;
+      o.type = kind === "good" ? "sine" : "triangle"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(kind === "good" ? .25 : .18, at + .02);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + (kind === "good" ? .35 : .45));
+      o.connect(g).connect(audioCtx.destination); o.start(at); o.stop(at + .5);
+    });
+  } catch (e) {}
+}
+function renderSoundBtns() {
+  document.querySelectorAll(".soundBtn").forEach(b => {
+    b.textContent = settings.sound ? "🔊" : "🔇";
+    b.setAttribute("aria-label", settings.sound ? "Voorlezen staat aan" : "Voorlezen staat uit");
+    b.classList.toggle("on", settings.sound);
+  });
+}
+function toggleSound() {
+  settings.sound = !settings.sound; save(); renderSoundBtns();
+  if (!settings.sound) return hush();
+  if (synth && pickVoice() && !dutchVoice && !voiceWarned) {
+    voiceWarned = true;
+    alert("Er is geen Nederlandse stem op dit apparaat gevonden. Installeer een Nederlandse stem in de instellingen van de tablet (Tekst-naar-spraak).");
+  }
+  // read what is on screen right now
+  if (mode === "learn") speak($("learnBody").querySelector(".learn-name") ? learnSpeech : "Tik op een teken, een land of een gebied op de kaart.");
+  else if (current && !answered) speak($("question").textContent);
+}
+document.querySelectorAll(".soundBtn").forEach(b => b.onclick = toggleSound);
+renderSoundBtns();
+$("question").onclick = () => { if (current && !answered) speak($("question").textContent); };
+let learnSpeech = "";
 
 // ---------- quiz ----------
 // Result card: colour and icon tell right / wrong / skipped / try-again at a glance.
@@ -368,6 +437,8 @@ function say(kind, title, detail = "") {
   f.className = "fb " + kind;
   f.replaceChildren();
   if (kind === "plain") { f.className = ""; f.textContent = title; return; }
+  if (kind === "good" || kind === "bad") effect(kind);
+  speak(/[.!?]$/.test(title) ? `${title} ${detail}` : `${title}. ${detail}`);
   const body = h("div", {}, h("b", { textContent: title }));
   if (detail) body.append(h("span", { textContent: detail }));
   f.append(h("i", { className: "fb-icon", textContent: ICONS[kind] }), body);
@@ -436,6 +507,7 @@ function ask() {
   $("next").hidden = true;
   $("skip").hidden = false;
   startClock();
+  speak($("question").textContent);
   resetHints(); $("hintBtn").disabled = false;
   $("hintBtn").hidden = current.style === "choice";      // picking from four needs no hint
   if (current.style !== "type") $("typeBox").hidden = true;
@@ -489,6 +561,7 @@ $("hintBtn").onclick = () => {
     const [x, y] = project(r, ...at), rad = r.width * .12, ang = Math.random() * 2 * Math.PI, off = rad * .45 * Math.random();
     overlay.appendChild(el("circle", { class: "ring hint-zone", cx: x + off * Math.cos(ang), cy: y + off * Math.sin(ang), r: rad }));
   }
+  speak(hs[hintStep]);
   hintStep++;
   $("hintBtn").textContent = hintStep < hs.length ? `💡 Nog een hint (${hintStep}/${hs.length})` : "💡 Geen hints meer";
   $("hintBtn").disabled = hintStep >= hs.length;
@@ -559,7 +632,7 @@ function stopClock() {
 let paused = false, pausedAt = 0, autoLeft = 0;
 function pauseQuiz() {
   if (paused || mode !== "quiz" || $("game").hidden || !current) return;
-  paused = true; pausedAt = Date.now();
+  paused = true; pausedAt = Date.now(); hush();
   if (clockTimer) { clearInterval(clockTimer); clockTimer = "paused"; }
   const wasAuto = !!autoTimer; clearAuto(); autoLeft = wasAuto ? settings.auto : 0;
   $("next").textContent = $("next").textContent.replace(/ \(\d+\)$/, "");   // drop the countdown number
@@ -672,6 +745,9 @@ function endRound() {
   $("feedback").innerHTML = `<div class="stars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</div>`;
   $("feedback").append(h("div", { className: "endtime", textContent: `⏱ Je deed er ${fmt(totalMs)} over, gemiddeld ${Math.round(totalMs / 1000 / roundSize)} ${Math.round(totalMs / 1000 / roundSize) === 1 ? "seconde" : "seconden"} per vraag.` }));
   $("timebar").hidden = true;
+  const secs = Math.round(totalMs / 1000), mins = Math.floor(secs / 60), rest = secs % 60;
+  const took = mins ? `${mins} ${mins === 1 ? "minuut" : "minuten"} en ${rest} seconden` : `${rest} seconden`;
+  speak(`${score} van ${roundSize} goed. Je deed er ${took} over.`);
   $("score").textContent = "";
   $("next").textContent = "Opnieuw spelen"; $("next").dataset.act = "again"; $("next").hidden = false;
   $("skip").hidden = true;
@@ -680,7 +756,7 @@ function endRound() {
   current = null;
 }
 $("backbtn").onclick = () => {
-  clearAuto(); clearInterval(clockTimer); clockTimer = null; paused = false; $("pauseScreen").hidden = true;
+  clearAuto(); clearInterval(clockTimer); clockTimer = null; paused = false; $("pauseScreen").hidden = true; hush();
   if (mode === "editor") return $("cCancel").onclick();
   renderHome(); show("home");
 };

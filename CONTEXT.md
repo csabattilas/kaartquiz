@@ -64,6 +64,10 @@ _Avoid_: Retry, extra life
 A way to use the map without questions: the child touches a Place and reads about it (the worksheet sentence and extra facts).
 _Avoid_: Study mode, explore
 
+**Read-aloud**:
+The tablet's voice speaking the Question, the feedback, the Hints and the learning information in Dutch; the child switches it on or off with a toggle right next to the Question.
+_Avoid_: Voice-over, sound, audio
+
 **Question**:
 One prompt asking the child to find a Place.
 

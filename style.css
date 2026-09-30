@@ -197,3 +197,11 @@ svg#map { height: 100%; max-width: 100%; touch-action: manipulation; }
   background: color-mix(in srgb, #f2c230 25%, var(--card)); border: 2px solid #f2c230; animation: pop .28s ease-out; }
 #updateBar[hidden] { display: none; }
 #updateBtn { padding: 8px 16px; font-size: 1rem; }
+
+.topright { display: flex; align-items: center; gap: 12px; }
+.soundBtn { padding: 6px 12px; font-size: 1.3rem; line-height: 1; border-radius: 12px; }
+.soundBtn.on { box-shadow: 0 0 0 2px var(--accent) inset; }
+#question { cursor: pointer; }
+.learn-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.learn-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.mini { padding: 4px 10px; font-size: 1rem; border-radius: 10px; }
