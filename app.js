@@ -13,7 +13,7 @@ const TYPES = {
   mountain: { label: "berg / gebergte", color: "#8b5a2b" },
   river:    { label: "rivier", color: "#2f7fd0" },
   water:    { label: "meer / zee / waterval", color: "#2f7fd0" },
-  sight:    { label: "bezienswaardigheid", color: "#c0392b" },
+  sight:    { label: "stad / bezienswaardigheid", color: "#c0392b" },
   area:     { label: "gebied / woestijn", color: "#2e8b57" },
   island:   { label: "eiland", color: "#159a9c" },
   volcano:  { label: "vulkaan", color: "#e0561e" },
@@ -80,8 +80,8 @@ function symbol(type, x, y, s) {
     case "water":    return el("circle", { ...a, cx: x, cy: y, r: s });
     case "island":   return el("polygon", { ...a, points: [0, 1, 2, 3, 4, 5].map(i => `${x + s * 1.15 * Math.cos(i * Math.PI / 3)},${y + s * 1.15 * Math.sin(i * Math.PI / 3)}`).join(" ") });
     case "volcano":  return el("polygon", { ...a, points: `${x - s * 1.1},${y - s * .8} ${x + s * 1.1},${y - s * .8} ${x},${y + s}` });
-    case "sight":    return el("rect", { ...a, x: x - s * .9, y: y - s * .9, width: s * 1.8, height: s * 1.8 });
-    default:         return el("rect", { ...a, x: x - s * 1.3, y: y - s * .75, width: s * 2.6, height: s * 1.5 });
+    case "sight":    return el("circle", { ...a, cx: x, cy: y, r: s });
+    default:         return el("rect", { ...a, x: x - s * .9, y: y - s * .9, width: s * 1.8, height: s * 1.8 });
   }
 }
 const markerSize = r => r.width * 0.011;
