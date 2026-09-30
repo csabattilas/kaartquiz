@@ -461,6 +461,15 @@ svg.addEventListener("pointerup", evt => {
   // Markers sit on top of the land, so look through them to the country underneath.
   const target = document.elementsFromPoint(evt.clientX, evt.clientY).find(n => n.dataset && n.dataset.id && n.closest("#land")) || null;
   if (current.kind === "country") {
+    // A marker that is not on the right country is a wrong answer, named after the marker
+    // (the Galápagos marker sits on sea, so this must come before the "sea" hint).
+    const mk = evt.target.closest && evt.target.closest("#markers [data-key]");
+    const onMarker = mk && pool.find(p => p.key === mk.dataset.key);
+    if (onMarker && onMarker.kind === "feature" && !(target && target.dataset.id === current.id)) {
+      reveal(r, current, true); reveal(r, onMarker, false); crossMark(r, ...project(r, ...onMarker.at));
+      say("bad", "Niet helemaal", `Je tikte op ${onMarker.name}. Het groene land is ${current.name}.`);
+      return finish(false);
+    }
     if (!target) { say("hint", "Dat is zee", "Probeer opnieuw!"); return; }
     if (target.classList.contains("territory")) { say("hint", "Dat is een ander gebied", "Probeer opnieuw!"); return; }
     const hit = target.dataset.id === current.id;
