@@ -589,11 +589,17 @@ function editDistance(a, b) {
     d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
   return d[a.length][b.length];
 }
+// A typo only counts if the answer is not just as close to another place (Brasilia / Brazilië).
+let lookAlike = null;
 function judgeTyped(text, p) {
-  const t = norm(text), names = [p.name, ...(p.alt || [])].map(norm);
-  if (names.includes(t)) return "exact";
+  lookAlike = null;
+  const t = norm(text), dist = q => Math.min(...[q.name, ...(q.alt || [])].map(n => editDistance(t, norm(n))));
+  const mine = dist(p);
+  if (mine === 0) return "exact";
   const slack = t.length >= 9 ? 2 : t.length >= 4 ? 1 : 0;
-  return names.some(n => editDistance(t, n) <= slack) ? "close" : "wrong";
+  if (mine > slack) return "wrong";
+  lookAlike = placesOf(region()).find(q => q.key !== p.key && dist(q) <= mine) || null;
+  return lookAlike ? "wrong" : "close";
 }
 function submitTyped() {
   if (paused || answered || !current || current.style !== "type") return;
@@ -607,7 +613,8 @@ function submitTyped() {
   reveal(r, current, true);
   if (verdict === "exact") say("good", "Goed zo!", `${current.plural ? "Het zijn" : "Het is"} ${current.name}.`);
   else if (verdict === "close") say("good", "Goed zo! Bijna goed gespeld", `Je typte “${text}”. Je schrijft het zo: ${cap(current.name)}.`);
-  else say("bad", "Niet helemaal", `Je typte “${text}”. Het goede antwoord is ${cap(current.name)}.`);
+  else say("bad", "Niet helemaal", `Je typte “${text}”. Het goede antwoord is ${cap(current.name)}.`
+    + (lookAlike ? ` Let op: ${cap(current.name)} en ${cap(lookAlike.name)} lijken op elkaar.` : ""));
   finish(hit);
 }
 $("typeGo").addEventListener("pointerdown", e => { e.preventDefault(); submitTyped(); });
