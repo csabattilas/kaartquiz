@@ -34,6 +34,8 @@
   <div class="row"><label for="lenInput">Of kies zelf een aantal:</label> <input id="lenInput" type="number" inputmode="numeric" min="1" max="200" style="width:5em;font:inherit;padding:8px;border-radius:10px;border:2px solid rgba(120,140,160,.4);background:var(--card);color:var(--ink)"></div>
   <h2>Automatisch verder na een antwoord</h2>
   <div class="seg" id="setAuto"></div>
+  <h2>Kaart</h2>
+  <div class="seg" id="setDetail"></div>
   <h2>Zoeken naar plekken</h2>
   <div class="seg" id="setMarks"></div>
   <h2>Landen <span class="count" id="countCountries"></span></h2>
@@ -76,6 +78,7 @@
       <defs><clipPath id="frame"><rect id="clipRect" rx="14"/></clipPath></defs>
       <rect class="sea" id="seaRect" rx="14"/>
       <g id="land" clip-path="url(#frame)"></g>
+      <g id="physical" clip-path="url(#frame)"></g>
       <g id="markers" clip-path="url(#frame)"></g>
       <g id="overlay" clip-path="url(#frame)"></g>
     </svg>

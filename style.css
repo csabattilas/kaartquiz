@@ -101,3 +101,8 @@ svg#map { height: 100%; max-width: 100%; touch-action: manipulation; }
 .marker { cursor: pointer; }
 .marker .hit { fill: transparent; }
 .marker .ring { fill: none; stroke-width: 3; }
+
+#physical path { pointer-events: none; }
+.range { fill: rgba(120, 82, 44, .28); stroke: none; }
+.lake { fill: var(--sea); stroke: #4f97cf; stroke-width: .8; }
+.river { fill: none; stroke: #3b8fd6; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }

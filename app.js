@@ -8,7 +8,7 @@ const SIZES = [["Klein", 100], ["Middel", 250], ["Groot", 500]];
 const NS = "http://www.w3.org/2000/svg";
 
 const AUTO = [["Uit", 0], ["3 sec", 3], ["5 sec", 5], ["10 sec", 10]];   // wait after an answer, then go on by itself
-const defaults = () => ({ region: REGIONS[0].id, length: 10, marks: true, auto: 0, off: {}, custom: {} });
+const defaults = () => ({ region: REGIONS[0].id, length: 10, marks: true, auto: 0, detail: true, off: {}, custom: {} });
 // Symbol per kind of Feature; the map shows only the symbol, never the name.
 const TYPES = {
   mountain: { label: "berg / gebergte", color: "#8b5a2b" },
@@ -127,6 +127,15 @@ function drawMap(r) {
   [...r.shapes].sort((a, b) => a.quiz - b.quiz).forEach(s =>
     land.appendChild(el("path", { class: s.quiz ? "country" : "territory", "data-id": s.code, d: s.d })));
   overlay.innerHTML = ""; $("markers").innerHTML = "";
+  drawPhysical(r);
+}
+// Mountain ranges, lakes and rivers drawn without names, under the markers.
+function drawPhysical(r) {
+  const box = $("physical"); box.innerHTML = "";
+  if (!settings.detail) return;
+  (r.ranges || []).forEach(d => box.appendChild(el("path", { class: "range", d })));
+  (r.lakes || []).forEach(d => box.appendChild(el("path", { class: "lake", d })));
+  (r.rivers || []).forEach(d => box.appendChild(el("path", { class: "river", d })));
 }
 function clearMarks() {
   overlay.innerHTML = "";
@@ -172,6 +181,7 @@ function renderSettings() {
   $("lenInput").value = settings.length || "";
   $("lenInput").placeholder = settings.length ? "" : "alles";
   seg($("setAuto"), AUTO, v => v === settings.auto, v => { settings.auto = v; save(); renderSettings(); });
+  seg($("setDetail"), [["Met rivieren en bergen", true], ["Alleen landen", false]], v => v === settings.detail, v => { settings.detail = v; save(); renderSettings(); });
   seg($("setMarks"), [["Met tekens op de kaart", true], ["Zonder tekens (tik op de plek)", false]], v => v === settings.marks, v => { settings.marks = v; save(); renderSettings(); });
 
   const fill = (box, kind, extra) => {
@@ -361,7 +371,8 @@ svg.addEventListener("pointerup", evt => {
   }
   if (answered || !current) return;
 
-  const target = evt.target.closest && evt.target.closest("[data-id]");
+  // Markers sit on top of the land, so look through them to the country underneath.
+  const target = document.elementsFromPoint(evt.clientX, evt.clientY).find(n => n.dataset && n.dataset.id && n.closest("#land")) || null;
   if (current.kind === "country") {
     if (!target) { say("hint", "Dat is zee", "Probeer opnieuw!"); return; }
     if (target.classList.contains("territory")) { say("hint", "Dat is een ander gebied", "Probeer opnieuw!"); return; }

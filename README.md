@@ -29,11 +29,15 @@ only runs over http/https.)
 ## Changing the Places
 
 1. Edit `places/south-america.json` (or `asia.json`).
-2. Regenerate the map files. This needs the Natural Earth 1:50m countries file (public domain):
-   https://github.com/nvkelso/natural-earth-vector/blob/master/geojson/ne_50m_admin_0_countries.geojson
+2. Regenerate the map files. This needs four Natural Earth 1:50m files (public domain) from
+   https://github.com/nvkelso/natural-earth-vector/tree/master/geojson :
+   `ne_50m_admin_0_countries`, `ne_50m_rivers_lake_centerlines`, `ne_50m_lakes` and
+   `ne_50m_geography_regions_polys` (all `.geojson`).
 
    ```bash
-   python3 tools/build_regions.py path/to/ne_50m_admin_0_countries.geojson
+   python3 tools/build_regions.py --countries ne_50m_admin_0_countries.geojson \
+     --rivers ne_50m_rivers_lake_centerlines.geojson --lakes ne_50m_lakes.geojson \
+     --regions ne_50m_geography_regions_polys.geojson
    ```
 3. Bump `CACHE` in `sw.js`, then reload.
 
